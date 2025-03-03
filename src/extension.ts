@@ -1,95 +1,98 @@
 // src/extension.ts
 import * as vscode from 'vscode';
-
-interface CustomHoverProvider {
-    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Hover>;
-}
-
-async function getHoverContent(filePath: string, line: number): Promise<vscode.MarkdownString> {
-    const content = new vscode.MarkdownString();
-    content.appendMarkdown('**Synthesized Code**\n\n');
-    
-    // Read synthesized.json from workspace
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders) {
-        const jsonPath = vscode.Uri.joinPath(workspaceFolders[0].uri, 'synthesized.json');
-        try {
-            const jsonContent = await vscode.workspace.fs.readFile(jsonPath);
-            const synthesizedData = JSON.parse(jsonContent.toString());
-            
-            // Find matching result
-            if (synthesizedData?.results) {
-                const matchingResult = synthesizedData.results.find(
-                    (result: any) => result.path === filePath && result.line === line
-                );
-                
-                if (matchingResult?.code) {
-                    // Decode base64 code
-                    const decodedCode = Buffer.from(matchingResult.code, 'base64').toString();
-                    content.appendMarkdown('```\n' + decodedCode + '\n```\n');
-                }
-            } else {
-                content.appendMarkdown('No synthesized code found for this line.');
-            }
-        } catch (error) {
-            content.appendMarkdown('*Error reading synthesized.json*\n');
-        }
-    }
-    
-    return content;
-}
-
-const createCustomHoverProvider = (): CustomHoverProvider => {
-    const requestContext = new WeakMap<vscode.TextDocument, boolean>();
-
-    return {
-        async provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-            if (requestContext.get(document)) return undefined;
-            
-            try {
-                requestContext.set(document, true);
-                const wordRange = document.getWordRangeAtPosition(position);
-                if (!wordRange) return undefined;
-                
-                const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
-                    '_executeHoverProvider',
-                    document.uri,
-                    position
-                );
-
-                const hasAIContext = hovers?.some(hover => {
-                    const contents = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
-                    return contents.some(content => {
-                        if (content instanceof vscode.MarkdownString) {
-                            return content.value.includes('(constant) AI: ContextStack');
-                        }
-                        if (typeof content === 'object' && content !== null) {
-                            return JSON.stringify(content).includes('(constant) AI: ContextStack');
-                        }
-                        return String(content).includes('(constant) AI: ContextStack');
-                    });
-                });
-
-                if (hasAIContext && hovers?.[0]) {
-                    const aiContent = await getHoverContent(document.uri.fsPath, position.line + 1);
-                    return new vscode.Hover([...(hovers[0].contents), aiContent]);
-                }
-                return hovers?.[0];
-            } finally {
-                requestContext.delete(document);
-            }
-        }
-    };
-};
+import { createCustomHoverProvider } from "./providers/hoverProvider";
+import { AIExecuteCodeLensProvider } from "./providers/codeLensProvider";
+import { AIExecuteHoverProvider } from "./providers/aiExecuteHoverProvider";
+import {
+  showExecutionPanel,
+  AIExecutionViewProvider,
+} from "./views/executionPanel";
+import {
+  aiExecuteDecoration,
+  aiExecuteInfoDecoration,
+  updateAIExecuteDecorations,
+  updateAIExecuteInfoDecorations,
+} from "./utils/decorationProvider";
+import { replaceWithAICode } from "./commands/replaceWithAICode";
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('AI Hover Extension is now active!');
+  console.log("AI Hover Extension is now active!");
 
-    const pythonExtension = vscode.extensions.getExtension('ms-python.python');
-    console.log('Python extension found:', pythonExtension?.id);
+  const pythonExtension = vscode.extensions.getExtension("ms-python.python");
+  console.log("Python extension found:", pythonExtension?.id);
 
-    const hoverProvider = vscode.languages.registerHoverProvider('python', createCustomHoverProvider());
-    context.subscriptions.push(hoverProvider);
+  // 注册悬停提供程序
+  const hoverProvider = vscode.languages.registerHoverProvider(
+    "python",
+    createCustomHoverProvider()
+  );
+  context.subscriptions.push(hoverProvider);
+
+  // 注册 AI.execute 悬停提供程序
+  const aiExecuteHoverProvider = vscode.languages.registerHoverProvider(
+    "*",
+    new AIExecuteHoverProvider()
+  );
+  context.subscriptions.push(aiExecuteHoverProvider);
+
+  // 注册WebviewView提供程序
+  const viewProvider = new AIExecutionViewProvider();
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider("aiExecutionView", viewProvider)
+  );
+
+  // 注册命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "aiHover.showDialog",
+      async (line: number) => {
+        await showExecutionPanel(line, context);
+      }
+    )
+  );
+
+  // 注册替换命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "aiHover.replaceWithAICode",
+      async (uri: vscode.Uri, range: vscode.Range) => {
+        await replaceWithAICode(uri, range);
+      }
+    )
+  );
+
+  // 注册CodeLens提供程序
+  vscode.languages.registerCodeLensProvider(
+    "*",
+    new AIExecuteCodeLensProvider()
+  );
+
+  // 初始化装饰
+  updateAIExecuteDecorations(vscode.window.activeTextEditor);
+  updateAIExecuteInfoDecorations(vscode.window.activeTextEditor);
+
+  // 监听编辑器变化
+  vscode.window.onDidChangeActiveTextEditor(
+    async (editor) => {
+      updateAIExecuteDecorations(editor);
+      await updateAIExecuteInfoDecorations(editor);
+    },
+    null,
+    context.subscriptions
+  );
+
+  // 监听文档变化
+  vscode.workspace.onDidChangeTextDocument(
+    async (event) => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && event.document === editor.document) {
+        updateAIExecuteDecorations(editor);
+        await updateAIExecuteInfoDecorations(editor);
+      }
+    },
+    null,
+    context.subscriptions
+  );
 }
 
 export function deactivate() {}
