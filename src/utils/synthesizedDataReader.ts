@@ -1,33 +1,33 @@
 import * as vscode from "vscode";
+import * as path from "path";
 
-interface SynthesizedResult {
-  path: string;
-  line: number;
-  args_md5: string;
+interface SynthesizedStep {
   raw: string;
   code: string;
+  args_md5: string;
   complexity: string;
-  explaination: string; // 注意：JSON 中的拼写是 explaination 而不是 explanation
+  explaination: string; // Note: JSON has this spelling
+}
+
+interface SynthesizedResult {
+  steps: SynthesizedStep[];
 }
 
 interface SynthesizedData {
-  results: SynthesizedResult[];
+  results: Record<string, SynthesizedResult>;
 }
 
 /**
- * 从 synthesized.json 文件中读取数据
+ * From synthesized.json file read data
  */
-export async function readSynthesizedData(): Promise<SynthesizedData | null> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    return null;
-  }
-
+export async function readSynthesizedData(filePath: string): Promise<SynthesizedData | null> {
   try {
-    const jsonPath = vscode.Uri.joinPath(
-      workspaceFolders[0].uri,
-      "synthesized.json"
-    );
+    // Get the directory of the current file
+    const fileDir = path.dirname(filePath);
+    
+    // Create path to synthesized.json in the same directory
+    const jsonPath = vscode.Uri.file(path.join(fileDir, "synthesized.json"));
+    
     const jsonContent = await vscode.workspace.fs.readFile(jsonPath);
     return JSON.parse(jsonContent.toString()) as SynthesizedData;
   } catch (error) {
@@ -37,37 +37,47 @@ export async function readSynthesizedData(): Promise<SynthesizedData | null> {
 }
 
 /**
- * 查找特定文件和行号的合成结果
+ * Find synthesized result for specific file and line number
  */
 export async function findSynthesizedResult(
   filePath: string,
   line: number
-): Promise<SynthesizedResult | null> {
-  const data = await readSynthesizedData();
+): Promise<{step: SynthesizedStep, totalSteps: number} | null> {
+  const data = await readSynthesizedData(filePath);
   if (!data || !data.results) {
     return null;
   }
 
-  // 尝试精确匹配路径和行号
-  const exactMatch = data.results.find(
-    (result) => result.path === filePath && result.line === line
-  );
+  // Try to find the result with the format "filePath:line"
+  const key = `${filePath}:${line}`;
+  let result = data.results[key];
 
-  if (exactMatch) {
-    return exactMatch;
+  // If not found, try with just the filename
+  if (!result) {
+    const fileName = filePath.split("/").pop() || "";
+    // Look for keys that end with "fileName:line"
+    const matchingKey = Object.keys(data.results).find(k => 
+      k.endsWith(`/${fileName}:${line}`) || k.endsWith(`:${fileName}:${line}`)
+    );
+    
+    if (matchingKey) {
+      result = data.results[matchingKey];
+    }
   }
 
-  // 如果没有精确匹配，尝试匹配文件名和行号
-  const fileName = filePath.split("/").pop() || "";
-  return (
-    data.results.find(
-      (result) => result.path.endsWith(fileName) && result.line === line
-    ) || null
-  );
+  // If result found, return the last step and total steps count
+  if (result && result.steps && result.steps.length > 0) {
+    return {
+      step: result.steps[result.steps.length - 1],
+      totalSteps: result.steps.length
+    };
+  }
+
+  return null;
 }
 
 /**
- * 解码 Base64 字符串
+ * Decode Base64 string
  */
 export function decodeBase64(base64: string): string {
   try {

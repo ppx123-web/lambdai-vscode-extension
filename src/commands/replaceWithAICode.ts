@@ -226,10 +226,10 @@ export async function replaceWithAICode(
     const document = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(document);
 
-    // 获取完整的 AI.execute 行
+    // Get complete AI.execute line
     const lineText = document.lineAt(range.start.line).text;
 
-    // 查找合成结果
+    // Find synthesized result
     const result = await findSynthesizedResult(
       uri.fsPath,
       range.start.line + 1
@@ -242,58 +242,58 @@ export async function replaceWithAICode(
       return;
     }
 
-    // 解码代码
-    const code = decodeBase64(result.code);
+    // Decode code
+    const code = decodeBase64(result.step.code);
 
-    // 确定缩进
+    // Determine indentation
     const indentMatch = lineText.match(/^(\s*)/);
     const indent = indentMatch ? indentMatch[1] : "";
 
-    // 添加缩进到每一行代码
+    // Add indentation to each line of code
     const indentedCode = code
       .split("\n")
       .map((line) => indent + line)
       .join("\n");
 
-    // 提取函数名
+    // Extract function name
     const functionName = extractFunctionName(code);
 
-    // 提取变量声明部分
+    // Extract variable declaration part
     const varDeclMatch = lineText.match(/^(\s*)(.*?)\s*=\s*AI\.execute/);
 
     if (!varDeclMatch) {
-      // 如果没有找到变量声明，则替换整行
+      // If no variable declaration found, replace entire line
       const fullRange = document.lineAt(range.start.line).range;
       await editor.edit((editBuilder) => {
         editBuilder.replace(fullRange, indentedCode);
       });
     } else {
-      // 提取变量声明部分
+      // Extract variable declaration part
       const varDecl = varDeclMatch[2];
 
-      // 获取完整的赋值语句范围
+      // Get complete assignment statement range
       const fullAssignmentRange = await findCompleteAssignmentRange(
         document,
         range.start.line
       );
 
-      // 提取 AI.execute 的参数
+      // Extract AI.execute parameters
       const params = await extractAIExecuteParams(
         document,
         fullAssignmentRange
       );
 
-      // 创建对生成函数的调用
+      // Create call to generated function
       const functionCall = `${indent}${varDecl} = ${functionName}(${params.join(
         ", "
       )})`;
 
-      // 执行替换：先插入代码，再替换原始赋值语句
+      // Execute replacement: first insert code, then replace original assignment
       await editor.edit((editBuilder) => {
-        // 在原始行之前插入生成的代码
+        // Insert generated code before original line
         editBuilder.insert(fullAssignmentRange.start, indentedCode + "\n");
 
-        // 替换原始赋值语句为函数调用
+        // Replace original assignment with function call
         editBuilder.replace(fullAssignmentRange, functionCall);
       });
     }

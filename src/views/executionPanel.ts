@@ -4,6 +4,7 @@ import { getPanelStyles } from "../styles/panelStyles";
 import {
   findSynthesizedResult,
   decodeBase64,
+  readSynthesizedData,
 } from "../utils/synthesizedDataReader";
 
 /**
@@ -12,34 +13,93 @@ import {
 export async function showExecutionPanel(
   line: number,
   context: vscode.ExtensionContext
-): Promise<vscode.WebviewPanel> {
+): Promise<void> {
   // 获取当前文件路径
   const activeEditor = vscode.window.activeTextEditor;
   if (!activeEditor) {
-    throw new Error("No active editor");
+    vscode.window.showErrorMessage("No active editor");
+    return;
   }
 
   const filePath = activeEditor.document.uri.fsPath;
 
   // 查找合成结果
-  const result = await findSynthesizedResult(filePath, line + 1);
+  const data = await readSynthesizedData(filePath);
+  if (!data || !data.results) {
+    vscode.window.showErrorMessage("No synthesized data found");
+    return;
+  }
+
+  // Find the result for this line
+  const key = `${filePath}:${line + 1}`;
+  let resultKey = key;
+  
+  // If not found directly, try to find by filename
+  if (!data.results[key]) {
+    const fileName = filePath.split("/").pop() || "";
+    const matchingKey = Object.keys(data.results).find(k => 
+      k.endsWith(`/${fileName}:${line + 1}`) || k.endsWith(`:${fileName}:${line + 1}`)
+    );
+    
+    if (matchingKey) {
+      resultKey = matchingKey;
+    } else {
+      vscode.window.showErrorMessage("No AI execution data found for this line");
+      return;
+    }
+  }
+
+  const result = data.results[resultKey];
+  if (!result || !result.steps || result.steps.length === 0) {
+    vscode.window.showErrorMessage("No steps found in AI execution data");
+    return;
+  }
 
   // 创建 Markdown 内容
   let markdownContent = `# AI Execution at Line ${line + 1}\n\n`;
+  
+  // Add summary information
+  const finalStep = result.steps[result.steps.length - 1];
+  const finalCode = decodeBase64(finalStep.code);
+  const finalComplexity = decodeBase64(finalStep.complexity);
+  
+  markdownContent += `## Summary\n\n`;
+  markdownContent += `- **Total Steps**: ${result.steps.length}\n`;
+  markdownContent += `- **Final Complexity**: ${finalComplexity}\n\n`;
 
-  if (result) {
-    // 解码 Base64 内容
-    const code = decodeBase64(result.code);
-    const explanation = decodeBase64(result.explaination);
-    const complexity = decodeBase64(result.complexity);
-
-    markdownContent += `## Code\n\n\`\`\`python\n${code}\n\`\`\`\n\n`;
-    markdownContent += `## Complexity\n\n${complexity}\n\n`;
-    markdownContent += `## Explanation\n\n${explanation}\n\n`;
-  } else {
-    markdownContent += `No synthesized data found for this line in \`synthesized.json\`.\n\n`;
-    markdownContent += `## Example Code\n\n\`\`\`python\ndef hello_world():\n    print("Hello, World!")\n    return 42\n\`\`\`\n\n`;
-    markdownContent += `## Additional Information\n\n- **Created**: ${new Date().toLocaleDateString()}\n- **Purpose**: Demonstration\n`;
+  // Create HTML for the panel
+  let stepsHtml = '';
+  
+  // Add timeline visualization and steps details
+  for (let i = 0; i < result.steps.length; i++) {
+    const step = result.steps[i];
+    const code = decodeBase64(step.code);
+    const explanation = decodeBase64(step.explaination);
+    const complexity = decodeBase64(step.complexity);
+    
+    stepsHtml += `
+      <div class="step">
+        <div class="step-header">
+          <div class="step-number">Step ${i + 1}</div>
+          <div class="step-complexity">Complexity: ${complexity}</div>
+        </div>
+        <div class="step-content">
+          <div class="step-code">
+            <h3>Code</h3>
+            <pre><code class="language-python">${escapeHtml(code)}</code></pre>
+          </div>
+          <div class="step-explanation">
+            <h3>Explanation</h3>
+            <div>${explanation}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add connector line if not the last step
+    if (i < result.steps.length - 1) {
+      stepsHtml += `<div class="step-connector"></div>`;
+    }
   }
 
   // 创建并显示 Markdown 预览
@@ -58,9 +118,6 @@ export async function showExecutionPanel(
     vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ||
     vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.HighContrast;
 
-  // 渲染HTML内容
-  const htmlContent = renderMarkdownToHtml(markdownContent);
-
   panel.webview.html = `<!DOCTYPE html>
     <html lang="en">
     <head>
@@ -69,11 +126,125 @@ export async function showExecutionPanel(
       <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
       <title>AI Execution</title>
       <style>
-        ${getPanelStyles(isDarkTheme)}
+        :root {
+          --background-color: ${isDarkTheme ? '#1e1e1e' : '#ffffff'};
+          --text-color: ${isDarkTheme ? '#cccccc' : '#333333'};
+          --border-color: ${isDarkTheme ? '#3c3c3c' : '#dddddd'};
+          --highlight-color: ${isDarkTheme ? '#0e639c' : '#007acc'};
+          --code-background: ${isDarkTheme ? '#2d2d2d' : '#f5f5f5'};
+        }
+        
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          background-color: var(--background-color);
+          color: var(--text-color);
+          padding: 20px;
+          line-height: 1.5;
+        }
+        
+        h1, h2, h3 {
+          color: var(--text-color);
+          margin-top: 0;
+        }
+        
+        pre {
+          background-color: var(--code-background);
+          padding: 16px;
+          border-radius: 6px;
+          overflow: auto;
+          font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+          font-size: 14px;
+          line-height: 1.45;
+        }
+        
+        code {
+          font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+        }
+        
+        .steps-container {
+          margin-top: 30px;
+        }
+        
+        .step {
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          margin-bottom: 20px;
+          background-color: var(--background-color);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .step-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          background-color: var(--highlight-color);
+          color: white;
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+        }
+        
+        .step-number {
+          font-weight: bold;
+          font-size: 16px;
+        }
+        
+        .step-complexity {
+          font-size: 14px;
+        }
+        
+        .step-content {
+          padding: 16px;
+        }
+        
+        .step-code, .step-explanation {
+          margin-bottom: 20px;
+        }
+        
+        .step-connector {
+          height: 30px;
+          width: 2px;
+          background-color: var(--highlight-color);
+          margin: 0 auto;
+          position: relative;
+        }
+        
+        .step-connector:after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: -4px;
+          width: 0;
+          height: 0;
+          border-left: 5px solid transparent;
+          border-right: 5px solid transparent;
+          border-top: 8px solid var(--highlight-color);
+        }
+        
+        .summary {
+          background-color: var(--code-background);
+          border-radius: 8px;
+          padding: 16px;
+          margin-bottom: 30px;
+        }
+        
+        .summary h2 {
+          margin-top: 0;
+        }
       </style>
     </head>
     <body>
-      ${htmlContent}
+      <h1>AI Execution at Line ${line + 1}</h1>
+      
+      <div class="summary">
+        <h2>Summary</h2>
+        <p><strong>Total Steps:</strong> ${result.steps.length}</p>
+        <p><strong>Final Complexity:</strong> ${finalComplexity}</p>
+      </div>
+      
+      <div class="steps-container">
+        ${stepsHtml}
+      </div>
     </body>
     </html>`;
 
@@ -88,8 +259,6 @@ export async function showExecutionPanel(
       }
     })
   );
-
-  return panel;
 }
 
 /**
@@ -98,7 +267,11 @@ export async function showExecutionPanel(
 export class AIExecutionViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
 
-  resolveWebviewView(webviewView: vscode.WebviewView) {
+  resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    context: vscode.WebviewViewResolveContext,
+    token: vscode.CancellationToken
+  ): void | Thenable<void> {
     this._view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
@@ -139,4 +312,14 @@ export class AIExecutionViewProvider implements vscode.WebviewViewProvider {
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/```([\s\S]*?)```/g, "<pre>$1</pre>");
   }
+}
+
+// Helper function to escape HTML
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

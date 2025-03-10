@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { findSynthesizedResult, decodeBase64 } from "../utils/synthesizedDataReader";
 
 interface CustomHoverProvider {
   provideHover(
@@ -15,34 +16,17 @@ async function getHoverContent(
   const content = new vscode.MarkdownString();
   content.appendMarkdown("**Synthesized Code**\n\n");
 
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    const jsonPath = vscode.Uri.joinPath(
-      workspaceFolders[0].uri,
-      "synthesized.json"
-    );
-    try {
-      const jsonContent = await vscode.workspace.fs.readFile(jsonPath);
-      const synthesizedData = JSON.parse(jsonContent.toString());
-
-      if (synthesizedData?.results) {
-        const matchingResult = synthesizedData.results.find(
-          (result: any) => result.path === filePath && result.line === line
-        );
-
-        if (matchingResult?.code) {
-          const decodedCode = Buffer.from(
-            matchingResult.code,
-            "base64"
-          ).toString();
-          content.appendMarkdown("```\n" + decodedCode + "\n```\n");
-        }
-      } else {
-        content.appendMarkdown("No synthesized code found for this line.");
-      }
-    } catch (error) {
-      content.appendMarkdown("*Error reading synthesized.json*\n");
+  try {
+    const result = await findSynthesizedResult(filePath, line);
+    
+    if (result?.step?.code) {
+      const decodedCode = decodeBase64(result.step.code);
+      content.appendMarkdown("```\n" + decodedCode + "\n```\n");
+    } else {
+      content.appendMarkdown("No synthesized code found for this line.");
     }
+  } catch (error) {
+    content.appendMarkdown("*Error reading synthesized data*\n");
   }
 
   return content;

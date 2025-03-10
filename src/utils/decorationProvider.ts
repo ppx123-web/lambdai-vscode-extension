@@ -1,14 +1,14 @@
 import * as vscode from "vscode";
 import { findSynthesizedResult, decodeBase64 } from "./synthesizedDataReader";
 
-// 创建装饰类型
+// Create decoration type
 export const aiExecuteDecoration = vscode.window.createTextEditorDecorationType(
   {
     textDecoration: "underline",
   }
 );
 
-// 创建行尾信息装饰类型
+// Create line end info decoration type
 export const aiExecuteInfoDecoration =
   vscode.window.createTextEditorDecorationType({
     after: {
@@ -18,7 +18,7 @@ export const aiExecuteInfoDecoration =
   });
 
 /**
- * 更新AI.execute的下划线装饰
+ * Update AI.execute underline decorations
  */
 export function updateAIExecuteDecorations(
   editor: vscode.TextEditor | undefined
@@ -42,7 +42,7 @@ export function updateAIExecuteDecorations(
 }
 
 /**
- * 更新AI.execute行尾的信息装饰
+ * Update AI.execute line end info decorations
  */
 export async function updateAIExecuteInfoDecorations(
   editor: vscode.TextEditor | undefined
@@ -60,18 +60,18 @@ export async function updateAIExecuteInfoDecorations(
     const lineNumber = range.start.line;
     const filePath = document.uri.fsPath;
 
-    // 查找合成结果
+    // Find synthesized result
     const result = await findSynthesizedResult(filePath, lineNumber + 1);
 
     if (result) {
-      // 解码复杂度
-      const complexity = decodeBase64(result.complexity);
+      // Decode complexity
+      const complexity = decodeBase64(result.step.complexity);
 
-      // 获取代码行数
-      const code = decodeBase64(result.code);
+      // Get code line count
+      const code = decodeBase64(result.step.code);
       const lineCount = code.split("\n").length;
 
-      // 创建装饰
+      // Create decoration
       const decoration: vscode.DecorationOptions = {
         range: new vscode.Range(
           lineNumber,
@@ -81,7 +81,7 @@ export async function updateAIExecuteInfoDecorations(
         ),
         renderOptions: {
           after: {
-            contentText: `Lambdai generated ${lineCount} lines. (${complexity})`,
+            contentText: `Lambdai generated ${lineCount} lines (within ${result.totalSteps} steps). (${complexity})`,
           },
         },
       };
@@ -94,7 +94,7 @@ export async function updateAIExecuteInfoDecorations(
 }
 
 /**
- * 查找文档中所有 AI.execute 文本的精确位置
+ * Find all AI.execute text exact positions in document
  */
 export function findAIExecuteRanges(
   document: vscode.TextDocument
@@ -118,7 +118,7 @@ export function findAIExecuteRanges(
 }
 
 /**
- * 在文档中查找包含 AI.execute 的行
+ * Find lines containing AI.execute in document
  */
 export function findAIExecuteLines(
   document: vscode.TextDocument

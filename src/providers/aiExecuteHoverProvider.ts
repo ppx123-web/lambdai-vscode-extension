@@ -12,47 +12,53 @@ export class AIExecuteHoverProvider implements vscode.HoverProvider {
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken
-  ): Promise<vscode.Hover | null> {
-    // 检查当前位置是否在 AI.execute 上
-    const lineText = document.lineAt(position.line).text;
+  ): Promise<vscode.Hover | null | undefined> {
+    const line = position.line;
+    const character = position.character;
+    const lineText = document.lineAt(line).text;
+
+    // Check if the hover is over AI.execute
     const aiExecuteIndex = lineText.indexOf("AI.execute");
-
     if (
-      aiExecuteIndex === -1 ||
-      position.character < aiExecuteIndex ||
-      position.character > aiExecuteIndex + "AI.execute".length
+      aiExecuteIndex !== -1 &&
+      character >= aiExecuteIndex &&
+      character <= aiExecuteIndex + "AI.execute".length
     ) {
-      return null;
+      // Find synthesized result
+      const result = await findSynthesizedResult(
+        document.uri.fsPath,
+        line + 1
+      );
+
+      if (result) {
+        // Create hover content
+        const content = new vscode.MarkdownString();
+        content.isTrusted = true;
+        content.supportHtml = true;
+
+        // Decode code, complexity and explanation
+        const code = decodeBase64(result.step.code);
+        const complexity = decodeBase64(result.step.complexity);
+        const explanation = decodeBase64(result.step.explaination);
+
+        // Add code preview
+        content.appendMarkdown("### AI Generated Code\n\n");
+        content.appendCodeblock(code, "python");
+
+        // Add explanation
+        content.appendMarkdown("\n### Explanation\n\n");
+        content.appendMarkdown(explanation);
+
+        // Add complexity
+        content.appendMarkdown("\n\n**Complexity:** " + complexity);
+        
+        // Add steps information
+        content.appendMarkdown(`\n\n**Steps:** ${result.totalSteps}`);
+
+        return new vscode.Hover(content);
+      }
     }
 
-    // 查找合成结果
-    const result = await findSynthesizedResult(
-      document.uri.fsPath,
-      position.line + 1
-    );
-
-    if (!result) {
-      return new vscode.Hover("No synthesized code found for this line.");
-    }
-
-    // 解码内容
-    const code = decodeBase64(result.code);
-    const complexity = decodeBase64(result.complexity);
-    const explanation = decodeBase64(result.explaination);
-
-    // 创建悬停内容
-    const content = new vscode.MarkdownString();
-    content.isTrusted = true;
-    content.supportHtml = true;
-
-    content.appendMarkdown(`### AI Generated Code\n\n`);
-    content.appendCodeblock(code, "python");
-    content.appendMarkdown(`\n**Time Complexity**: ${complexity}\n\n`);
-    content.appendMarkdown(`**Explanation**: ${explanation}\n\n`);
-    content.appendMarkdown(
-      `[View Details](command:aiHover.showDialog?${position.line})`
-    );
-
-    return new vscode.Hover(content);
+    return null;
   }
 }
