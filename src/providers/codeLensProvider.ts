@@ -18,6 +18,14 @@ export class AIExecuteCodeLensProvider implements vscode.CodeLensProvider {
       });
       codeLenses.push(viewLens);
 
+      // 添加编辑代码的 CodeLens
+      const editLens = new vscode.CodeLens(range, {
+        title: "✏️ Edit Code",
+        command: "aiHover.editCode",
+        arguments: [document.uri, range.start.line],
+      });
+      codeLenses.push(editLens);
+
       // 添加替换为 AI 代码的 CodeLens
       const replaceLens = new vscode.CodeLens(range, {
         title: "⚡ Replace with AI Code",

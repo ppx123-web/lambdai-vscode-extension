@@ -77,10 +77,15 @@ export async function showExecutionPanel(
     const explanation = decodeBase64(step.explaination);
     const complexity = decodeBase64(step.complexity);
     
+    // Check if this is a user edit step
+    const isUserEdit = complexity === "(USER EDIT)" || explanation === "(USER EDIT)";
+    const stepHeaderClass = isUserEdit ? "step-header user-edit" : "step-header";
+    const stepTitle = isUserEdit ? "User Edit" : `Step ${i + 1}`;
+    
     stepsHtml += `
       <div class="step">
-        <div class="step-header">
-          <div class="step-number">Step ${i + 1}</div>
+        <div class="${stepHeaderClass}">
+          <div class="step-number">${stepTitle}</div>
           <div class="step-complexity">Complexity: ${complexity}</div>
         </div>
         <div class="step-content">
@@ -132,6 +137,7 @@ export async function showExecutionPanel(
           --border-color: ${isDarkTheme ? '#3c3c3c' : '#dddddd'};
           --highlight-color: ${isDarkTheme ? '#0e639c' : '#007acc'};
           --code-background: ${isDarkTheme ? '#2d2d2d' : '#f5f5f5'};
+          --user-edit-color: ${isDarkTheme ? '#b58900' : '#e6af00'};
         }
         
         body {
@@ -182,6 +188,12 @@ export async function showExecutionPanel(
           color: white;
           border-top-left-radius: 8px;
           border-top-right-radius: 8px;
+        }
+        
+        .step-header.user-edit {
+          background-color: var(--user-edit-color);
+          color: ${isDarkTheme ? 'black' : 'black'};
+          font-weight: bold;
         }
         
         .step-number {

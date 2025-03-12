@@ -14,6 +14,7 @@ import {
   updateAIExecuteInfoDecorations,
 } from "./utils/decorationProvider";
 import { replaceWithAICode } from "./commands/replaceWithAICode";
+import { editCode } from "./commands/editCode";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("AI Hover Extension is now active!");
@@ -57,6 +58,16 @@ export function activate(context: vscode.ExtensionContext) {
       "aiHover.replaceWithAICode",
       async (uri: vscode.Uri, range: vscode.Range) => {
         await replaceWithAICode(uri, range);
+      }
+    )
+  );
+
+  // 注册编辑代码命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "aiHover.editCode",
+      async (uri: vscode.Uri, line: number) => {
+        await editCode(uri, line);
       }
     )
   );
