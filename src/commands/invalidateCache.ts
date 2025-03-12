@@ -1,11 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import { findLambdaiDir } from "../utils/synthesizedDataReader";
 
-/**
- * Open a new editor with the code from the last step and set up saving back to synthesized.json
- */
-export async function editCode(
+export async function invalidateCache(
   uri: vscode.Uri,
   line: number
 ): Promise<void> {
@@ -26,20 +24,17 @@ export async function editCode(
     const cacheFilePath = path.join(lambdaaiDir, cacheFileName);
 
     // Check if cache file exists
-    const cacheFileUri = vscode.Uri.file(cacheFilePath);
-    try {
-      await vscode.workspace.fs.stat(cacheFileUri);
-    } catch {
+    if (!fs.existsSync(cacheFilePath)) {
       vscode.window.showErrorMessage(`Cache file not found: ${cacheFileName}`);
       return;
     }
 
-    // Open the cache file directly
-    const document = await vscode.workspace.openTextDocument(cacheFileUri);
-    await vscode.window.showTextDocument(document);
+    // Delete the cache file
+    fs.unlinkSync(cacheFilePath);
+    vscode.window.showInformationMessage(`Cache invalidated: ${cacheFileName}`);
     
   } catch (error) {
-    console.error("Error opening cache file:", error);
-    vscode.window.showErrorMessage("Failed to open cache file");
+    console.error("Error invalidating cache:", error);
+    vscode.window.showErrorMessage("Failed to invalidate cache");
   }
 } 

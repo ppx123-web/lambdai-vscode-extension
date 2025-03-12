@@ -33,6 +33,14 @@ export class AIExecuteCodeLensProvider implements vscode.CodeLensProvider {
         arguments: [document.uri, range],
       });
       codeLenses.push(replaceLens);
+
+      // 添加清除缓存的 CodeLens
+      const invalidateLens = new vscode.CodeLens(range, {
+        title: "🧹 Invalidate Cache",
+        command: "aiHover.invalidateCache",
+        arguments: [document.uri, range.start.line],
+      });
+      codeLenses.push(invalidateLens);
     }
 
     return codeLenses;

@@ -15,6 +15,7 @@ import {
 } from "./utils/decorationProvider";
 import { replaceWithAICode } from "./commands/replaceWithAICode";
 import { editCode } from "./commands/editCode";
+import { invalidateCache } from "./commands/invalidateCache";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("AI Hover Extension is now active!");
@@ -68,6 +69,16 @@ export function activate(context: vscode.ExtensionContext) {
       "aiHover.editCode",
       async (uri: vscode.Uri, line: number) => {
         await editCode(uri, line);
+      }
+    )
+  );
+
+  // 注册清除缓存命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "aiHover.invalidateCache",
+      async (uri: vscode.Uri, line: number) => {
+        await invalidateCache(uri, line);
       }
     )
   );

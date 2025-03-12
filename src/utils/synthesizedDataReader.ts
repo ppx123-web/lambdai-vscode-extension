@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 
 interface SynthesizedStep {
   raw: string;
@@ -18,20 +19,81 @@ interface SynthesizedData {
 }
 
 /**
+ * Find the .lambdai directory by searching in current and parent directories
+ */
+export function findLambdaiDir(startDir: string): string | null {
+  let currentDir = startDir;
+  while (currentDir !== path.dirname(currentDir)) { // Stop at root directory
+    const lambdaiPath = path.join(currentDir, '.lambdai');
+    if (fs.existsSync(lambdaiPath)) {
+      return lambdaiPath;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  return null;
+}
+
+/**
  * From synthesized.json file read data
  */
 export async function readSynthesizedData(filePath: string): Promise<SynthesizedData | null> {
   try {
-    // Get the directory of the current file
     const fileDir = path.dirname(filePath);
+    const fileName = path.basename(filePath, '.py');
     
-    // Create path to synthesized.json in the same directory
-    const jsonPath = vscode.Uri.file(path.join(fileDir, "synthesized.json"));
-    
-    const jsonContent = await vscode.workspace.fs.readFile(jsonPath);
-    return JSON.parse(jsonContent.toString()) as SynthesizedData;
+    // Find .lambdai directory by searching up the directory tree
+    const lambdaaiDir = findLambdaiDir(fileDir);
+    if (!lambdaaiDir) {
+      console.log("Lambda AI directory not found in", fileDir, "or its parent directories");
+      return null;
+    }
+
+    const results: Record<string, SynthesizedResult> = {};
+
+    const files = fs.readdirSync(lambdaaiDir);
+    for (const file of files) {
+      if (file.startsWith(fileName + '_cache_') && file.endsWith('.py')) {
+        const lineMatch = file.match(/_cache_(\d+)\.py$/);
+        if (!lineMatch) continue;
+
+        const lineNumber = parseInt(lineMatch[1]);
+        const cacheFilePath = path.join(lambdaaiDir, file);
+
+        try {
+          const content = fs.readFileSync(cacheFilePath, 'utf8');
+          
+          // Create a synthetic step from the cache content
+          const step: SynthesizedStep = {
+            raw: content,
+            code: Buffer.from(content).toString('base64'),
+            args_md5: "cache",
+            complexity: Buffer.from("From Cache").toString('base64'),
+            explaination: Buffer.from("Code loaded from cache").toString('base64')
+          };
+
+          // Create result with single step (maintaining steps array for compatibility)
+          const result: SynthesizedResult = {
+            steps: [step]
+          };
+
+          // Use the same key format as before
+          const key = `${filePath}:${lineNumber}`;
+          results[key] = result;
+        } catch (err) {
+          console.error(`Error reading cache file ${file}:`, err);
+        }
+      }
+    }
+
+    // Only return null if no results were found
+    if (Object.keys(results).length === 0) {
+      console.log("No cache files found for", fileName);
+      return null;
+    }
+
+    return { results };
   } catch (error) {
-    console.error("Error reading synthesized.json:", error);
+    console.error("Error reading from .lambdaai directory:", error);
     return null;
   }
 }
