@@ -77,21 +77,27 @@ export async function showExecutionPanel(
     const explanation = decodeBase64(step.explaination);
     const complexity = decodeBase64(step.complexity);
     
-    // Check if this is a user edit step
     const isUserEdit = complexity === "(USER EDIT)" || explanation === "(USER EDIT)";
     const stepHeaderClass = isUserEdit ? "step-header user-edit" : "step-header";
     const stepTitle = isUserEdit ? "User Edit" : `Step ${i + 1}`;
 
-    // For trace steps, show the prompt
-    const explanationHtml = step.args_md5 === "trace" 
-      ? `<div class="step-prompt">
-           <h3>Prompt</h3>
+    // For trace steps, show the error (with title only if not empty)
+    let explanationHtml = '';
+    if (step.args_md5 === "trace") {
+      if (explanation && explanation.trim() !== "") {
+        explanationHtml = `<div class="step-prompt">
+           <h3>Error</h3>
            <div>${explanation}</div>
-         </div>`
-      : `<div class="step-explanation">
+         </div>`;
+      } else {
+        explanationHtml = '';
+      }
+    } else {
+      explanationHtml = `<div class="step-explanation">
            <h3>Explanation</h3>
            <div>${explanation}</div>
          </div>`;
+    }
     
     stepsHtml += `
       <div class="step">
@@ -109,7 +115,6 @@ export async function showExecutionPanel(
       </div>
     `;
     
-    // Add connector line if not the last step
     if (i < result.steps.length - 1) {
       stepsHtml += `<div class="step-connector"></div>`;
     }

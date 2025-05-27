@@ -13,6 +13,7 @@ interface SynthesizedStep {
 interface TraceStep {
   prompt: string;
   code: string;
+  error?: string;
 }
 
 interface SynthesizedResult {
@@ -99,7 +100,7 @@ export async function readSynthesizedData(filePath: string): Promise<Synthesized
                 code: traceStep.code,
                 args_md5: "trace",
                 complexity: Buffer.from("From Trace").toString('base64'),
-                explaination: traceStep.prompt // Store prompt as explanation
+                explaination: traceStep.error ? traceStep.error : ""
               });
             }
           }
