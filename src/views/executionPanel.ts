@@ -77,31 +77,44 @@ export async function showExecutionPanel(
     const explanation = decodeBase64(step.explaination);
     const complexity = decodeBase64(step.complexity);
     
-    // Check if this is a user edit step
     const isUserEdit = complexity === "(USER EDIT)" || explanation === "(USER EDIT)";
     const stepHeaderClass = isUserEdit ? "step-header user-edit" : "step-header";
     const stepTitle = isUserEdit ? "User Edit" : `Step ${i + 1}`;
+
+    // For trace steps, show the error (with title only if not empty)
+    let explanationHtml = '';
+    if (step.args_md5 === "trace") {
+      if (explanation && explanation.trim() !== "") {
+        explanationHtml = `<div class="step-prompt">
+           <h3>Error</h3>
+           <div>${explanation}</div>
+         </div>`;
+      } else {
+        explanationHtml = '';
+      }
+    } else {
+      explanationHtml = `<div class="step-explanation">
+           <h3>Explanation</h3>
+           <div>${explanation}</div>
+         </div>`;
+    }
     
     stepsHtml += `
       <div class="step">
         <div class="${stepHeaderClass}">
           <div class="step-number">${stepTitle}</div>
-          <div class="step-complexity">Complexity: ${complexity}</div>
+          <div class="step-complexity">${complexity}</div>
         </div>
         <div class="step-content">
           <div class="step-code">
             <h3>Code</h3>
             <pre><code class="language-python">${escapeHtml(code)}</code></pre>
           </div>
-          <div class="step-explanation">
-            <h3>Explanation</h3>
-            <div>${explanation}</div>
-          </div>
+          ${explanationHtml}
         </div>
       </div>
     `;
     
-    // Add connector line if not the last step
     if (i < result.steps.length - 1) {
       stepsHtml += `<div class="step-connector"></div>`;
     }
@@ -138,6 +151,7 @@ export async function showExecutionPanel(
           --highlight-color: ${isDarkTheme ? '#0e639c' : '#007acc'};
           --code-background: ${isDarkTheme ? '#2d2d2d' : '#f5f5f5'};
           --user-edit-color: ${isDarkTheme ? '#b58900' : '#e6af00'};
+          --prompt-background: ${isDarkTheme ? '#2a2d2e' : '#f8f8f8'};
         }
         
         body {
@@ -209,8 +223,15 @@ export async function showExecutionPanel(
           padding: 16px;
         }
         
-        .step-code, .step-explanation {
+        .step-code, .step-explanation, .step-prompt {
           margin-bottom: 20px;
+        }
+
+        .step-prompt {
+          background-color: var(--prompt-background);
+          padding: 12px;
+          border-radius: 6px;
+          border-left: 4px solid var(--highlight-color);
         }
         
         .step-connector {
@@ -251,7 +272,6 @@ export async function showExecutionPanel(
       <div class="summary">
         <h2>Summary</h2>
         <p><strong>Total Steps:</strong> ${result.steps.length}</p>
-        <p><strong>Final Complexity:</strong> ${finalComplexity}</p>
       </div>
       
       <div class="steps-container">

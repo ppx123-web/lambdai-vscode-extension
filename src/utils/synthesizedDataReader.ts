@@ -7,7 +7,13 @@ interface SynthesizedStep {
   code: string;
   args_md5: string;
   complexity: string;
-  explaination: string; // Note: JSON has this spelling
+  explaination: string;
+}
+
+interface TraceStep {
+  prompt: string;
+  code: string;
+  error?: string;
 }
 
 interface SynthesizedResult {
@@ -34,22 +40,40 @@ export function findLambdaiDir(startDir: string): string | null {
 }
 
 /**
- * From synthesized.json file read data
+ * Read trace file for a specific line
  */
+async function readTraceFile(lambdaaiDir: string, fileName: string, line: number): Promise<TraceStep[] | null> {
+  const traceFileName = `${fileName}_trace_${line}.json`;
+  const traceFilePath = path.join(lambdaaiDir, traceFileName);
+
+  if (!fs.existsSync(traceFilePath)) {
+    return null;
+  }
+
+  try {
+    const content = fs.readFileSync(traceFilePath, 'utf8');
+    return JSON.parse(content) as TraceStep[];
+  } catch (error) {
+    console.error("Error reading trace file:", error);
+    return null;
+  }
+}
+
 export async function readSynthesizedData(filePath: string): Promise<SynthesizedData | null> {
   try {
     const fileDir = path.dirname(filePath);
     const fileName = path.basename(filePath, '.py');
     
-    // Find .lambdai directory by searching up the directory tree
+    // Find .lambdai directory
     const lambdaaiDir = findLambdaiDir(fileDir);
     if (!lambdaaiDir) {
-      console.log("Lambda AI directory not found in", fileDir, "or its parent directories");
+      console.log("Lambda AI directory not found:", fileDir);
       return null;
     }
 
     const results: Record<string, SynthesizedResult> = {};
 
+    // Check for specific cache file based on line number
     const files = fs.readdirSync(lambdaaiDir);
     for (const file of files) {
       if (file.startsWith(fileName + '_cache_') && file.endsWith('.py')) {
@@ -62,25 +86,45 @@ export async function readSynthesizedData(filePath: string): Promise<Synthesized
         try {
           const content = fs.readFileSync(cacheFilePath, 'utf8');
           
-          // Create a synthetic step from the cache content
-          const step: SynthesizedStep = {
-            raw: content,
-            code: Buffer.from(content).toString('base64'),
-            args_md5: "cache",
-            complexity: Buffer.from("From Cache").toString('base64'),
-            explaination: Buffer.from("Code loaded from cache").toString('base64')
-          };
+          // Read trace file for this line
+          const traceSteps = await readTraceFile(lambdaaiDir, fileName, lineNumber);
+          
+          // Create steps array from trace if available
+          const steps: SynthesizedStep[] = [];
+          
+          if (traceSteps) {
+            // Add steps from trace file
+            for (const traceStep of traceSteps) {
+              steps.push({
+                raw: decodeBase64(traceStep.prompt),
+                code: traceStep.code,
+                args_md5: "trace",
+                complexity: Buffer.from("From Trace").toString('base64'),
+                explaination: traceStep.error ? traceStep.error : ""
+              });
+            }
+          }
+          
+          // Add final cache content as the last step if not already included
+          const lastTraceCode = steps.length > 0 ? decodeBase64(steps[steps.length - 1].code) : null;
+          if (lastTraceCode !== content) {
+            steps.push({
+              raw: content,
+              code: Buffer.from(content).toString('base64'),
+              args_md5: "cache",
+              complexity: Buffer.from("Final Result").toString('base64'),
+              explaination: Buffer.from("Final generated code").toString('base64')
+            });
+          }
 
-          // Create result with single step (maintaining steps array for compatibility)
-          const result: SynthesizedResult = {
-            steps: [step]
-          };
+          // Create result with steps
+          const result: SynthesizedResult = { steps };
 
           // Use the same key format as before
           const key = `${filePath}:${lineNumber}`;
           results[key] = result;
         } catch (err) {
-          console.error(`Error reading cache file ${file}:`, err);
+          console.error(`Error reading cache/trace files ${file}:`, err);
         }
       }
     }
@@ -93,7 +137,7 @@ export async function readSynthesizedData(filePath: string): Promise<Synthesized
 
     return { results };
   } catch (error) {
-    console.error("Error reading from .lambdaai directory:", error);
+    console.error("Error reading from .lambdai directory:", error);
     return null;
   }
 }
