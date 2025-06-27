@@ -36,7 +36,10 @@ export async function editCode(
 
     // Open the cache file directly
     const document = await vscode.workspace.openTextDocument(cacheFileUri);
-    await vscode.window.showTextDocument(document);
+    await vscode.window.showTextDocument(document, {
+      viewColumn: vscode.ViewColumn.Beside,
+      preserveFocus: true
+    });
     
   } catch (error) {
     console.error("Error opening cache file:", error);
