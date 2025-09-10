@@ -1,0 +1,8 @@
+2025-07-04 17:55:36.158 | DEBUG    | codeblock.py:31 - Initializing code block
+2025-07-04 17:55:36.266 | DEBUG    | code.py:16 - Load code from cache: /Users/choi/work/lambdai/tests/system/hard_test/csv_tests/.lambdai/test_create_cache_7.py
+2025-07-04 17:55:36.266 | DEBUG    | code.py:16 - Load code from cache: /Users/choi/work/lambdai/tests/system/hard_test/csv_tests/.lambdai/test_create_cache_7.py
+2025-07-04 17:55:36.267 | DEBUG    | code.py:16 - Load code from cache: /Users/choi/work/lambdai/tests/system/hard_test/csv_tests/.lambdai/test_create_cache_7.py
+2025-07-04 17:55:36.267 | DEBUG    | code.py:16 - Load code from cache: /Users/choi/work/lambdai/tests/system/hard_test/csv_tests/.lambdai/test_create_cache_7.py
+2025-07-04 17:55:36.267 | DEBUG    | parse.py:46 - Extracted function names: ['generate_random_strings_lambdai']
+2025-07-04 17:55:36.268 | DEBUG    | parse.py:57 - Function parameters: []
+2025-07-04 17:55:36.268 | DEBUG    | parse.py:79 - Return args counts=[1]

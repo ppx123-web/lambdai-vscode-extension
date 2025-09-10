@@ -95,12 +95,28 @@ export async function readSynthesizedData(filePath: string): Promise<Synthesized
           if (traceSteps) {
             // Add steps from trace file
             for (const traceStep of traceSteps) {
+              // Check if trace code is already Base64 encoded or plain text
+              let codeToStore: string;
+              try {
+                // Try to decode as Base64 first - if it succeeds, it was already encoded
+                const decoded = Buffer.from(traceStep.code, 'base64').toString('utf8');
+                // Check if the decoded result looks like valid text (not binary)
+                if (decoded.length > 0 && /^[\x20-\x7E\s]*$/.test(decoded)) {
+                  codeToStore = traceStep.code; // Already Base64 encoded
+                } else {
+                  codeToStore = Buffer.from(traceStep.code).toString('base64'); // Plain text, need to encode
+                }
+              } catch {
+                // If Base64 decode fails, it's plain text
+                codeToStore = Buffer.from(traceStep.code).toString('base64');
+              }
+              
               steps.push({
                 raw: decodeBase64(traceStep.prompt),
-                code: traceStep.code,
+                code: codeToStore,
                 args_md5: "trace",
                 complexity: Buffer.from("From Trace").toString('base64'),
-                explaination: traceStep.error ? traceStep.error : ""
+                explaination: Buffer.from(traceStep.error ? traceStep.error : "").toString('base64')
               });
             }
           }

@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "parse csv file {fname}, return header, rows. Header is a list",
+        "code": "def parse_csv_lambdai(fname: 'PosixPath'):\n    \"\"\"\n    parse csv file {fname}, return header, rows. Header is a list\n    \"\"\"\n    import csv\n    with open(fname, 'r') as csvfile:\n        csvreader = csv.reader(csvfile)\n        header = next(csvreader)\n        rows = list(csvreader)\n    return header, rows",
+        "error": ""
+    }
+]
