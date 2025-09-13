@@ -1,6 +1,71 @@
 import * as vscode from "vscode";
 import { findSynthesizedResult, decodeBase64 } from "./synthesizedDataReader";
 
+/**
+ * Check if AI.execute is inside a Python comment
+ */
+function isInPythonComment(lineText: string, aiExecuteIndex: number): boolean {
+  // Find the first '#' character before the AI.execute
+  const commentIndex = lineText.indexOf('#');
+  
+  // If there's no '#' or it comes after AI.execute, it's not in a comment
+  if (commentIndex === -1 || commentIndex > aiExecuteIndex) {
+    return false;
+  }
+  
+  // Check if the '#' is inside a string literal
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inTripleQuote = false;
+  let escapeNext = false;
+  
+  for (let i = 0; i < commentIndex; i++) {
+    const char = lineText[i];
+    const prevChar = i > 0 ? lineText[i - 1] : '';
+    const nextChar = i < lineText.length - 1 ? lineText[i + 1] : '';
+    
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+    
+    // Handle triple quotes
+    if (char === '"' && prevChar === '"' && i > 0 && lineText[i - 2] === '"') {
+      inTripleQuote = !inTripleQuote;
+      continue;
+    }
+    
+    if (char === "'" && prevChar === "'" && i > 0 && lineText[i - 2] === "'") {
+      inTripleQuote = !inTripleQuote;
+      continue;
+    }
+    
+    if (inTripleQuote) {
+      continue;
+    }
+    
+    // Handle single and double quotes
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    }
+  }
+  
+  // If we're inside any kind of string when we reach '#', it's not a comment
+  if (inSingleQuote || inDoubleQuote || inTripleQuote) {
+    return false;
+  }
+  
+  // The '#' is a real comment marker, so AI.execute is in a comment
+  return true;
+}
+
 // Create decoration type
 export const aiExecuteDecoration = vscode.window.createTextEditorDecorationType(
   {
@@ -28,6 +93,12 @@ export function updateAIExecuteDecorations(
   }
 
   const document = editor.document;
+  
+  // Only apply decorations to Python files
+  if (document.languageId !== 'python') {
+    return;
+  }
+
   const aiExecuteRanges = findAIExecuteRanges(document);
 
   // Create decoration options with hover message
@@ -52,6 +123,13 @@ export async function updateAIExecuteInfoDecorations(
   }
 
   const document = editor.document;
+  
+  // Only apply decorations to Python files
+  if (document.languageId !== 'python') {
+    editor.setDecorations(aiExecuteInfoDecoration, []);
+    return;
+  }
+
   const aiExecuteLines = findAIExecuteLines(document);
 
   const decorations: vscode.DecorationOptions[] = [];
@@ -94,7 +172,7 @@ export async function updateAIExecuteInfoDecorations(
 }
 
 /**
- * Find all AI.execute text exact positions in document
+ * Find all AI.execute text exact positions in document (excluding comments)
  */
 export function findAIExecuteRanges(
   document: vscode.TextDocument
@@ -105,7 +183,7 @@ export function findAIExecuteRanges(
     const text = line.text;
     const aiExecuteIndex = text.indexOf("AI.execute");
 
-    if (aiExecuteIndex !== -1) {
+    if (aiExecuteIndex !== -1 && !isInPythonComment(text, aiExecuteIndex)) {
       const startPos = new vscode.Position(i, aiExecuteIndex);
       const endPos = new vscode.Position(
         i,
@@ -118,7 +196,7 @@ export function findAIExecuteRanges(
 }
 
 /**
- * Find lines containing AI.execute in document
+ * Find lines containing AI.execute in document (excluding comments)
  */
 export function findAIExecuteLines(
   document: vscode.TextDocument
@@ -126,7 +204,10 @@ export function findAIExecuteLines(
   const ranges: vscode.Range[] = [];
   for (let i = 0; i < document.lineCount; i++) {
     const line = document.lineAt(i);
-    if (line.text.includes("AI.execute")) {
+    const text = line.text;
+    const aiExecuteIndex = text.indexOf("AI.execute");
+    
+    if (aiExecuteIndex !== -1 && !isInPythonComment(text, aiExecuteIndex)) {
       ranges.push(line.range);
     }
   }

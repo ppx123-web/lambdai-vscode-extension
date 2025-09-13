@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "Generate random string.Return as list[list[str]].length of outer list is 10.length of inner list is 5.",
+        "code": "def generate_random_strings_lambdai() -> 'list[list[str]]':\n    \"\"\"\n    Generate random string.Return as list[list[str]].length of outer list is 10.length of inner list is 5.\n    \"\"\"\n    import random\n    import string\n    \n    def generate_random_string(length):\n        return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(length))\n    \n    outer_list = []\n    for _ in range(10):\n        inner_list = [generate_random_string(5) for _ in range(5)]\n        outer_list.append(inner_list)\n    \n    return outer_list",
+        "error": ""
+    }
+]

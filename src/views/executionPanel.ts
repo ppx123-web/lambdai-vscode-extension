@@ -6,6 +6,12 @@ import {
   decodeBase64,
   readSynthesizedData,
 } from "../utils/synthesizedDataReader";
+// Load Prism.js for syntax highlighting
+const Prism: {
+  highlight: (text: string, grammar: any, language: string) => string;
+  languages: { [key: string]: any };
+} = require('prismjs');
+require('prismjs/components/prism-python');
 
 /**
  * 创建并显示AI执行预览面板
@@ -70,52 +76,72 @@ export async function showExecutionPanel(
   // Create HTML for the panel
   let stepsHtml = '';
   
-  // Add timeline visualization and steps details
-  for (let i = 0; i < result.steps.length; i++) {
+  // Reverse order: show final result first, then previous attempts
+  for (let i = result.steps.length - 1; i >= 0; i--) {
     const step = result.steps[i];
     const code = decodeBase64(step.code);
     const explanation = decodeBase64(step.explaination);
     const complexity = decodeBase64(step.complexity);
     
     const isUserEdit = complexity === "(USER EDIT)" || explanation === "(USER EDIT)";
-    const stepHeaderClass = isUserEdit ? "step-header user-edit" : "step-header";
-    const stepTitle = isUserEdit ? "User Edit" : `Step ${i + 1}`;
-
-    // For trace steps, show the error (with title only if not empty)
-    let explanationHtml = '';
-    if (step.args_md5 === "trace") {
-      if (explanation && explanation.trim() !== "") {
-        explanationHtml = `<div class="step-prompt">
-           <h3>Error</h3>
-           <div>${explanation}</div>
-         </div>`;
-      } else {
-        explanationHtml = '';
-      }
+    const isTrace = step.args_md5 === "trace";
+    const hasError = isTrace && explanation && explanation.trim() !== "";
+    
+    // Determine step status and styling
+    let stepHeaderClass, stepTitle, statusIndicator;
+    if (i === result.steps.length - 1) {
+      // Final step
+      stepHeaderClass = "step-header final-step";
+      stepTitle = "Final Result";
+      statusIndicator = '<span class="status-indicator success">✓ FINAL</span>';
+    } else if (isUserEdit) {
+      stepHeaderClass = "step-header user-edit";
+      stepTitle = "User Edit";
+      statusIndicator = '<span class="status-indicator user">✎ USER</span>';
     } else {
+      // Previous attempts
+      const attemptNumber = i + 1;
+      stepHeaderClass = hasError ? "step-header error-step" : "step-header success-step";
+      stepTitle = `Attempt ${attemptNumber}`;
+      statusIndicator = hasError 
+        ? '<span class="status-indicator error">✗ ERROR</span>'
+        : '<span class="status-indicator success">✓ PASS</span>';
+    }
+
+    // Create explanation/error content
+    let explanationHtml = '';
+    if (isTrace && hasError) {
+      explanationHtml = `<div class="step-error">
+         <h3>Error Details</h3>
+         <div class="error-message">${escapeHtml(explanation)}</div>
+       </div>`;
+    } else if (!isTrace) {
       explanationHtml = `<div class="step-explanation">
-           <h3>Explanation</h3>
-           <div>${explanation}</div>
-         </div>`;
+         <h3>Explanation</h3>
+         <div>${explanation}</div>
+       </div>`;
     }
     
     stepsHtml += `
       <div class="step">
         <div class="${stepHeaderClass}">
-          <div class="step-number">${stepTitle}</div>
+          <div class="step-info">
+            <div class="step-number">${stepTitle}</div>
+            ${statusIndicator}
+          </div>
           <div class="step-complexity">${complexity}</div>
         </div>
         <div class="step-content">
           <div class="step-code">
             <h3>Code</h3>
-            <pre><code class="language-python">${escapeHtml(code)}</code></pre>
+            <pre><code class="language-python">${highlightPythonCode(code)}</code></pre>
           </div>
           ${explanationHtml}
         </div>
       </div>
     `;
     
-    if (i < result.steps.length - 1) {
+    if (i > 0) {
       stepsHtml += `<div class="step-connector"></div>`;
     }
   }
@@ -141,7 +167,7 @@ export async function showExecutionPanel(
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
       <title>AI Execution</title>
       <style>
         :root {
@@ -152,6 +178,10 @@ export async function showExecutionPanel(
           --code-background: ${isDarkTheme ? '#2d2d2d' : '#f5f5f5'};
           --user-edit-color: ${isDarkTheme ? '#b58900' : '#e6af00'};
           --prompt-background: ${isDarkTheme ? '#2a2d2e' : '#f8f8f8'};
+          --success-color: ${isDarkTheme ? '#28a745' : '#198754'};
+          --error-color: ${isDarkTheme ? '#dc3545' : '#dc3545'};
+          --final-color: ${isDarkTheme ? '#6f42c1' : '#6610f2'};
+          --error-background: ${isDarkTheme ? '#2d1b1b' : '#f8d7da'};
         }
         
         body {
@@ -175,6 +205,49 @@ export async function showExecutionPanel(
           font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
           font-size: 14px;
           line-height: 1.45;
+        }
+        
+        /* Prism.js syntax highlighting styles */
+        .token.keyword {
+          color: ${isDarkTheme ? '#569cd6' : '#0000ff'};
+          font-weight: bold;
+        }
+        
+        .token.string {
+          color: ${isDarkTheme ? '#ce9178' : '#a31515'};
+        }
+        
+        .token.comment {
+          color: ${isDarkTheme ? '#6a9955' : '#008000'};
+          font-style: italic;
+        }
+        
+        .token.number {
+          color: ${isDarkTheme ? '#b5cea8' : '#098658'};
+        }
+        
+        .token.function {
+          color: ${isDarkTheme ? '#dcdcaa' : '#795e26'};
+        }
+        
+        .token.operator {
+          color: ${isDarkTheme ? '#d4d4d4' : '#000000'};
+        }
+        
+        .token.punctuation {
+          color: ${isDarkTheme ? '#d4d4d4' : '#000000'};
+        }
+        
+        .token.builtin {
+          color: ${isDarkTheme ? '#4ec9b0' : '#008080'};
+        }
+        
+        .token.boolean {
+          color: ${isDarkTheme ? '#569cd6' : '#0000ff'};
+        }
+        
+        .token.class-name {
+          color: ${isDarkTheme ? '#4ec9b0' : '#2b91af'};
         }
         
         code {
@@ -204,10 +277,55 @@ export async function showExecutionPanel(
           border-top-right-radius: 8px;
         }
         
+        .step-header.final-step {
+          background-color: var(--final-color);
+          color: white;
+          font-weight: bold;
+        }
+        
+        .step-header.success-step {
+          background-color: var(--success-color);
+          color: white;
+        }
+        
+        .step-header.error-step {
+          background-color: var(--error-color);
+          color: white;
+        }
+        
         .step-header.user-edit {
           background-color: var(--user-edit-color);
           color: ${isDarkTheme ? 'black' : 'black'};
           font-weight: bold;
+        }
+        
+        .step-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .status-indicator {
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: bold;
+          text-transform: uppercase;
+        }
+        
+        .status-indicator.success {
+          background-color: rgba(255, 255, 255, 0.2);
+          color: #90ee90;
+        }
+        
+        .status-indicator.error {
+          background-color: rgba(255, 255, 255, 0.2);
+          color: #ffb6c1;
+        }
+        
+        .status-indicator.user {
+          background-color: rgba(0, 0, 0, 0.2);
+          color: #333;
         }
         
         .step-number {
@@ -223,7 +341,7 @@ export async function showExecutionPanel(
           padding: 16px;
         }
         
-        .step-code, .step-explanation, .step-prompt {
+        .step-code, .step-explanation, .step-prompt, .step-error {
           margin-bottom: 20px;
         }
 
@@ -232,6 +350,19 @@ export async function showExecutionPanel(
           padding: 12px;
           border-radius: 6px;
           border-left: 4px solid var(--highlight-color);
+        }
+        
+        .step-error {
+          background-color: var(--error-background);
+          padding: 12px;
+          border-radius: 6px;
+          border-left: 4px solid var(--error-color);
+        }
+        
+        .error-message {
+          font-family: monospace;
+          color: var(--error-color);
+          font-weight: bold;
         }
         
         .step-connector {
@@ -277,6 +408,17 @@ export async function showExecutionPanel(
       <div class="steps-container">
         ${stepsHtml}
       </div>
+      
+      <script>
+        // Handle theme changes
+        window.addEventListener('message', event => {
+          const message = event.data;
+          if (message.type === 'themeChange') {
+            // Theme changed, but syntax highlighting is already done server-side
+            console.log('Theme changed to:', message.isDarkTheme ? 'dark' : 'light');
+          }
+        });
+      </script>
     </body>
     </html>`;
 
@@ -354,4 +496,17 @@ function escapeHtml(unsafe: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// Server-side Python syntax highlighting using Prism.js
+function highlightPythonCode(code: string): string {
+  try {
+    // Use Prism.js to highlight Python code
+    const highlighted = Prism.highlight(code, Prism.languages.python, 'python');
+    return highlighted;
+  } catch (error) {
+    console.error('Error highlighting code with Prism:', error);
+    // Fallback to escaped HTML if Prism fails
+    return escapeHtml(code);
+  }
 }

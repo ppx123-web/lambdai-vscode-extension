@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // 注册 AI.execute 悬停提供程序
   const aiExecuteHoverProvider = vscode.languages.registerHoverProvider(
-    "*",
+    "python",
     new AIExecuteHoverProvider()
   );
   context.subscriptions.push(aiExecuteHoverProvider);
@@ -85,7 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // 注册CodeLens提供程序
   vscode.languages.registerCodeLensProvider(
-    "*",
+    "python",
     new AIExecuteCodeLensProvider()
   );
 

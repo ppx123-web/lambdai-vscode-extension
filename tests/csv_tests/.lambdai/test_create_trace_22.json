@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "Megre the data '{d1}', '{d2}'. and sort the data by each stringReturn as list[str]. ",
+        "code": "def merge_and_sort_lambdai(d1: 'list', d2: 'list') -> 'list[str]':\n    \"\"\"\n    Merge the data '{d1}', '{d2}'. and sort the data by each string. Return as list[str].\n    \"\"\"\n    # Flatten both lists of lists into single lists\n    flat_d1 = [item for sublist in d1 for item in sublist]\n    flat_d2 = [item for sublist in d2 for item in sublist]\n    \n    # Merge the two flattened lists\n    merged = flat_d1 + flat_d2\n    \n    # Sort the merged list\n    merged.sort()\n    \n    return merged",
+        "error": ""
+    }
+]
