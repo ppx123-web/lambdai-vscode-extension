@@ -7,6 +7,7 @@ import {
   showExecutionPanel,
   AIExecutionViewProvider,
 } from "./views/executionPanel";
+import { PanelManager } from "./utils/panelManager";
 import {
   aiExecuteDecoration,
   aiExecuteInfoDecoration,
@@ -22,6 +23,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   const pythonExtension = vscode.extensions.getExtension("ms-python.python");
   console.log("Python extension found:", pythonExtension?.id);
+
+  // Initialize panel manager
+  const panelManager = new PanelManager(context);
+  globalPanelManager = panelManager;
 
   // 注册悬停提供程序
   const hoverProvider = vscode.languages.registerHoverProvider(
@@ -48,7 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "aiHover.showDialog",
       async (line: number) => {
-        await showExecutionPanel(line, context);
+        await showExecutionPanel(line, context, panelManager);
       }
     )
   );
@@ -117,4 +122,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate() {}
+let globalPanelManager: PanelManager | null = null;
+
+export function deactivate() {
+  if (globalPanelManager) {
+    globalPanelManager.dispose();
+    globalPanelManager = null;
+  }
+}

@@ -10,8 +10,8 @@ export async function invalidateCache(
   try {
     const filePath = uri.fsPath;
     const fileDir = path.dirname(filePath);
-    const fileName = path.basename(filePath, '.py');
-    
+    const fileName = path.basename(filePath, ".py");
+
     // Find .lambdai directory
     const lambdaaiDir = findLambdaiDir(fileDir);
     if (!lambdaaiDir) {
@@ -19,20 +19,47 @@ export async function invalidateCache(
       return;
     }
 
-    // Construct cache file path
+    // Construct cache and trace file paths
     const cacheFileName = `${fileName}_cache_${line + 1}.py`;
+    const traceFileName = `${fileName}_trace_${line + 1}.json`;
     const cacheFilePath = path.join(lambdaaiDir, cacheFileName);
+    const traceFilePath = path.join(lambdaaiDir, traceFileName);
 
-    // Check if cache file exists
-    if (!fs.existsSync(cacheFilePath)) {
-      vscode.window.showErrorMessage(`Cache file not found: ${cacheFileName}`);
-      return;
+    let deletedFiles = [];
+    let notFoundFiles = [];
+
+    // Check and delete cache file
+    if (fs.existsSync(cacheFilePath)) {
+      fs.unlinkSync(cacheFilePath);
+      deletedFiles.push(cacheFileName);
+    } else {
+      notFoundFiles.push(cacheFileName);
     }
 
-    // Delete the cache file
-    fs.unlinkSync(cacheFilePath);
-    vscode.window.showInformationMessage(`Cache invalidated: ${cacheFileName}`);
-    
+    // Check and delete trace file
+    if (fs.existsSync(traceFilePath)) {
+      fs.unlinkSync(traceFilePath);
+      deletedFiles.push(traceFileName);
+    } else {
+      notFoundFiles.push(traceFileName);
+    }
+
+    // Show appropriate message
+    if (deletedFiles.length > 0) {
+      const deletedMessage = `Cache invalidated: ${deletedFiles.join(", ")}`;
+      if (notFoundFiles.length > 0) {
+        vscode.window.showInformationMessage(
+          `${deletedMessage} (${notFoundFiles.join(", ")} not found)`
+        );
+      } else {
+        vscode.window.showInformationMessage(deletedMessage);
+      }
+    } else {
+      vscode.window.showErrorMessage(
+        `No cache files found for line ${line + 1}`
+      );
+      return;
+    }
   } catch (error) {
     console.error("Error invalidating cache:", error);
     vscode.window.showErrorMessage("Failed to invalidate cache");
