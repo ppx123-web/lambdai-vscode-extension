@@ -8,6 +8,7 @@ import {
   AIExecutionViewProvider,
 } from "./views/executionPanel";
 import { PanelManager } from "./utils/panelManager";
+import { LambdaiPanelProvider } from "./views/lambdaiPanel";
 import {
   aiExecuteDecoration,
   aiExecuteInfoDecoration,
@@ -46,6 +47,15 @@ export function activate(context: vscode.ExtensionContext) {
   const viewProvider = new AIExecutionViewProvider();
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("aiExecutionView", viewProvider)
+  );
+
+  // 注册LAMBDAI面板提供程序
+  const lambdaiPanelProvider = new LambdaiPanelProvider(context);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      LambdaiPanelProvider.viewType,
+      lambdaiPanelProvider
+    )
   );
 
   // 注册命令

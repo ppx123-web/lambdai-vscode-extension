@@ -32,6 +32,32 @@
           ".py"
         ]
       }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "lambdaiContainer",
+          "title": "LAMBDAI",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "lambdaiContainer": [
+        {
+          "id": "lambdaiPanel",
+          "name": "Generated Code",
+          "type": "webview",
+          "contextualTitle": "LambdaAI Generated Code"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "lambdaiPanel",
+        "contents": "No AI generated code found in this workspace.\n[Generate Code](command:workbench.action.showCommands) using AI.execute to see it here.",
+        "when": "lambdaiPanel.empty"
+      }
     ]
   },
   "scripts": {
