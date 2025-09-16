@@ -9,6 +9,7 @@ import {
 } from "./views/executionPanel";
 import { PanelManager } from "./utils/panelManager";
 import { LambdaiPanelProvider } from "./views/lambdaiPanel";
+import { DecorationRefreshManager } from "./utils/decorationRefreshManager";
 import {
   aiExecuteDecoration,
   aiExecuteInfoDecoration,
@@ -28,6 +29,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize panel manager
   const panelManager = new PanelManager(context);
   globalPanelManager = panelManager;
+
+  // Initialize decoration refresh manager
+  const decorationRefreshManager = new DecorationRefreshManager(context);
+  globalDecorationRefreshManager = decorationRefreshManager;
 
   // 注册悬停提供程序
   const hoverProvider = vscode.languages.registerHoverProvider(
@@ -133,10 +138,16 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 let globalPanelManager: PanelManager | null = null;
+let globalDecorationRefreshManager: DecorationRefreshManager | null = null;
 
 export function deactivate() {
   if (globalPanelManager) {
     globalPanelManager.dispose();
     globalPanelManager = null;
+  }
+
+  if (globalDecorationRefreshManager) {
+    globalDecorationRefreshManager.dispose();
+    globalDecorationRefreshManager = null;
   }
 }

@@ -16,8 +16,8 @@ interface AIGeneratedCode {
 }
 
 export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'lambdaiPanel';
-  
+  public static readonly viewType = "lambdaiPanel";
+
   private _view?: vscode.WebviewView;
   private _context: vscode.ExtensionContext;
   private _fileWatcher?: vscode.FileSystemWatcher;
@@ -31,31 +31,29 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken,
+    _token: vscode.CancellationToken
   ) {
     this._view = webviewView;
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        this._context.extensionUri
-      ]
+      localResourceRoots: [this._context.extensionUri],
     };
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(
-      message => {
+      (message) => {
         switch (message.type) {
-          case 'selectCode':
+          case "selectCode":
             this._selectedCodeId = message.codeId;
             this._updateWebview();
             break;
-          case 'openFile':
+          case "openFile":
             this._openFileAtLine(message.filePath, message.line);
             break;
-          case 'refresh':
+          case "refresh":
             this._refreshCodeList();
             break;
         }
@@ -66,14 +64,14 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
 
     // Setup file watcher
     this._setupFileWatcher();
-    
+
     // Initial load
     this._refreshCodeList();
   }
 
   private _setupFileWatcher() {
     // Watch for changes in .lambdai directories
-    const pattern = '**/.lambdai/**/*.{py,json}';
+    const pattern = "**/.lambdai/**/*.{py,json}";
     this._fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this._fileWatcher.onDidChange(() => this._refreshCodeList());
@@ -84,31 +82,44 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private async _refreshCodeList() {
-    this._generatedCodes = [];
+    // Use a Map to prevent duplicates based on unique ID
+    const codeMap = new Map<string, AIGeneratedCode>();
 
     if (!vscode.workspace.workspaceFolders) {
+      this._generatedCodes = [];
       this._updateWebview();
       return;
     }
 
     for (const workspaceFolder of vscode.workspace.workspaceFolders) {
-      await this._scanWorkspaceFolder(workspaceFolder.uri.fsPath);
+      await this._scanWorkspaceFolder(workspaceFolder.uri.fsPath, codeMap);
     }
 
-    // Sort by last modified date (newest first)
-    this._generatedCodes.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+    // Convert map to array and sort by last modified date (newest first)
+    this._generatedCodes = Array.from(codeMap.values());
+    this._generatedCodes.sort(
+      (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
+    );
+
+    // If the currently selected code no longer exists, clear the selection
+    if (this._selectedCodeId && !codeMap.has(this._selectedCodeId)) {
+      this._selectedCodeId = null;
+    }
 
     this._updateWebview();
   }
 
-  private async _scanWorkspaceFolder(folderPath: string) {
+  private async _scanWorkspaceFolder(
+    folderPath: string,
+    codeMap: Map<string, AIGeneratedCode>
+  ) {
     try {
       const files = this._findPythonFiles(folderPath);
-      
+
       for (const filePath of files) {
         const fileDir = path.dirname(filePath);
         const lambdaiDir = findLambdaiDir(fileDir);
-        
+
         if (!lambdaiDir) {
           continue;
         }
@@ -119,12 +130,12 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
           continue;
         }
 
-        const fileName = path.basename(filePath, '.py');
+        const fileName = path.basename(filePath, ".py");
 
         // Process each result
         for (const [key, result] of Object.entries(data.results)) {
           // Extract line number from key (format: "filepath:line")
-          const keyParts = key.split(':');
+          const keyParts = key.split(":");
           const lineStr = keyParts[keyParts.length - 1];
           const line = parseInt(lineStr) - 1; // Convert to 0-based
 
@@ -135,14 +146,20 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
           // Calculate code length from final step
           const finalStep = result.steps[result.steps.length - 1];
           const code = decodeBase64(finalStep.code);
-          
+
           // Check for cache and trace files
-          const cacheFile = path.join(lambdaiDir, `${fileName}_cache_${line + 1}.py`);
-          const traceFile = path.join(lambdaiDir, `${fileName}_trace_${line + 1}.json`);
-          
+          const cacheFile = path.join(
+            lambdaiDir,
+            `${fileName}_cache_${line + 1}.py`
+          );
+          const traceFile = path.join(
+            lambdaiDir,
+            `${fileName}_trace_${line + 1}.json`
+          );
+
           const hasCache = fs.existsSync(cacheFile);
           const hasTrace = fs.existsSync(traceFile);
-          
+
           // Get last modified time
           let lastModified = new Date();
           if (hasCache) {
@@ -159,40 +176,45 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
             codeLength: code.length,
             lastModified,
             hasCache,
-            hasTrace
+            hasTrace,
           };
 
-          this._generatedCodes.push(generatedCode);
+          // Use the unique ID as the key to prevent duplicates
+          codeMap.set(generatedCode.id, generatedCode);
         }
       }
     } catch (error) {
-      console.error('Error scanning workspace folder:', error);
+      console.error("Error scanning workspace folder:", error);
     }
   }
 
   private _findPythonFiles(dir: string): string[] {
     const files: string[] = [];
-    
+
     try {
       const items = fs.readdirSync(dir);
-      
+
       for (const item of items) {
         const fullPath = path.join(dir, item);
         const stats = fs.statSync(fullPath);
-        
+
         if (stats.isDirectory()) {
           // Skip node_modules, .git, and other common directories
-          if (!item.startsWith('.') && item !== 'node_modules' && item !== '__pycache__') {
+          if (
+            !item.startsWith(".") &&
+            item !== "node_modules" &&
+            item !== "__pycache__"
+          ) {
             files.push(...this._findPythonFiles(fullPath));
           }
-        } else if (item.endsWith('.py')) {
+        } else if (item.endsWith(".py")) {
           files.push(fullPath);
         }
       }
     } catch (error) {
       // Ignore directories we can't read
     }
-    
+
     return files;
   }
 
@@ -200,7 +222,7 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
     try {
       const document = await vscode.workspace.openTextDocument(filePath);
       const editor = await vscode.window.showTextDocument(document);
-      
+
       const position = new vscode.Position(line, 0);
       editor.selection = new vscode.Selection(position, position);
       editor.revealRange(new vscode.Range(position, position));
@@ -219,43 +241,57 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
     if (!this._selectedCodeId) {
       return null;
     }
-    return this._generatedCodes.find(code => code.id === this._selectedCodeId) || null;
+    return (
+      this._generatedCodes.find((code) => code.id === this._selectedCodeId) ||
+      null
+    );
   }
 
   private _getHtmlForWebview(webview: vscode.Webview) {
     const selectedCode = this._getSelectedCodeStats();
-    
+
     // Generate code list HTML
-    const codeListHtml = this._generatedCodes.map(code => {
-      const isSelected = code.id === this._selectedCodeId;
-      const statusIcons = [];
-      if (code.hasCache) statusIcons.push('💾');
-      if (code.hasTrace) statusIcons.push('🔍');
-      
-      return `
-        <div class="code-item ${isSelected ? 'selected' : ''}" data-code-id="${code.id}">
+    const codeListHtml = this._generatedCodes
+      .map((code) => {
+        const isSelected = code.id === this._selectedCodeId;
+        const statusIcons = [];
+        if (code.hasCache) statusIcons.push("💾");
+        if (code.hasTrace) statusIcons.push("🔍");
+
+        return `
+        <div class="code-item ${isSelected ? "selected" : ""}" data-code-id="${
+          code.id
+        }">
           <div class="code-header">
             <span class="file-name">${code.fileName}</span>
             <span class="line-number">:${code.line + 1}</span>
-            <span class="status-icons">${statusIcons.join(' ')}</span>
+            <span class="status-icons">${statusIcons.join(" ")}</span>
           </div>
           <div class="code-meta">
             <span class="step-count">${code.stepCount} steps</span>
             <span class="code-length">${code.codeLength} chars</span>
-            <span class="last-modified">${this._formatDate(code.lastModified)}</span>
+            <span class="last-modified">${this._formatDate(
+              code.lastModified
+            )}</span>
           </div>
         </div>
       `;
-    }).join('');
+      })
+      .join("");
 
     // Generate stats HTML
-    const statsHtml = selectedCode ? `
+    const statsHtml = selectedCode
+      ? `
       <div class="stats-content">
         <h3>Code Statistics</h3>
         <div class="stat-item">
           <label>File:</label>
-          <span class="file-path" title="${selectedCode.filePath}">${selectedCode.fileName}</span>
-          <button class="open-file-btn" data-file-path="${selectedCode.filePath}" data-line="${selectedCode.line}">📂 Open</button>
+          <span class="file-path" title="${selectedCode.filePath}">${
+          selectedCode.fileName
+        }</span>
+          <button class="open-file-btn" data-file-path="${
+            selectedCode.filePath
+          }" data-line="${selectedCode.line}">📂 Open</button>
         </div>
         <div class="stat-item">
           <label>Line:</label>
@@ -271,7 +307,9 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="stat-item">
           <label>Path:</label>
-          <span class="full-path" title="${selectedCode.filePath}">${selectedCode.filePath}</span>
+          <span class="full-path" title="${selectedCode.filePath}">${
+          selectedCode.filePath
+        }</span>
         </div>
         <div class="stat-item">
           <label>Last Modified:</label>
@@ -280,12 +318,13 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
         <div class="stat-item">
           <label>Files:</label>
           <span>
-            ${selectedCode.hasCache ? '💾 Cache' : '❌ No Cache'} | 
-            ${selectedCode.hasTrace ? '🔍 Trace' : '❌ No Trace'}
+            ${selectedCode.hasCache ? "💾 Cache" : "❌ No Cache"} | 
+            ${selectedCode.hasTrace ? "🔍 Trace" : "❌ No Trace"}
           </span>
         </div>
       </div>
-    ` : `
+    `
+      : `
       <div class="stats-placeholder">
         <p>Select a generated code item to view statistics</p>
       </div>
@@ -488,12 +527,16 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
                 <button class="refresh-btn" id="refresh-btn">🔄 Refresh</button>
             </div>
             <div class="panel-content">
-                ${this._generatedCodes.length > 0 ? codeListHtml : `
+                ${
+                  this._generatedCodes.length > 0
+                    ? codeListHtml
+                    : `
                 <div class="empty-state">
                     <div>No AI generated code found</div>
                     <div style="font-size: 0.9em;">Generate some code using AI.execute to see it here</div>
                 </div>
-                `}
+                `
+                }
             </div>
         </div>
         <div class="right-panel">
@@ -560,7 +603,7 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
     const days = Math.floor(diff / 86400000);
 
     if (minutes < 1) {
-      return 'just now';
+      return "just now";
     } else if (minutes < 60) {
       return `${minutes}m ago`;
     } else if (hours < 24) {
@@ -578,3 +621,4 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
     }
   }
 }
+
