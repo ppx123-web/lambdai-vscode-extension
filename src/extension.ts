@@ -10,6 +10,7 @@ import {
 import { PanelManager } from "./utils/panelManager";
 import { LambdaiPanelProvider } from "./views/lambdaiPanel";
 import { DecorationRefreshManager } from "./utils/decorationRefreshManager";
+import { LineTracker } from "./utils/lineTracker";
 import {
   aiExecuteDecoration,
   aiExecuteInfoDecoration,
@@ -33,6 +34,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize decoration refresh manager
   const decorationRefreshManager = new DecorationRefreshManager(context);
   globalDecorationRefreshManager = decorationRefreshManager;
+
+  // Initialize line tracker
+  const lineTracker = new LineTracker(context);
+  globalLineTracker = lineTracker;
 
   // 注册悬停提供程序
   const hoverProvider = vscode.languages.registerHoverProvider(
@@ -139,6 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 let globalPanelManager: PanelManager | null = null;
 let globalDecorationRefreshManager: DecorationRefreshManager | null = null;
+let globalLineTracker: LineTracker | null = null;
 
 export function deactivate() {
   if (globalPanelManager) {
@@ -149,5 +155,10 @@ export function deactivate() {
   if (globalDecorationRefreshManager) {
     globalDecorationRefreshManager.dispose();
     globalDecorationRefreshManager = null;
+  }
+
+  if (globalLineTracker) {
+    globalLineTracker.dispose();
+    globalLineTracker = null;
   }
 }
