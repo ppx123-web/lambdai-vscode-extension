@@ -9,10 +9,12 @@ import { updateAIExecuteInfoDecorations } from './decorationProvider';
 export class DecorationRefreshManager {
   private fileWatcher: vscode.FileSystemWatcher | null = null;
   private openEditors: Set<vscode.TextEditor> = new Set();
+  private refreshInterval: NodeJS.Timeout | null = null;
 
   constructor(private context: vscode.ExtensionContext) {
     this.setupFileWatcher();
     this.setupEditorTracking();
+    this.setupPeriodicRefresh();
   }
 
   private setupFileWatcher() {
@@ -67,6 +69,21 @@ export class DecorationRefreshManager {
     vscode.window.visibleTextEditors.forEach(editor => {
       if (editor.document.languageId === 'python') {
         this.openEditors.add(editor);
+      }
+    });
+  }
+
+  private setupPeriodicRefresh() {
+    // Set up periodic refresh every 2 seconds as a fallback
+    this.refreshInterval = setInterval(() => {
+      this.refreshAllDecorations();
+    }, 2000);
+
+    this.context.subscriptions.push({
+      dispose: () => {
+        if (this.refreshInterval) {
+          clearInterval(this.refreshInterval);
+        }
       }
     });
   }
@@ -179,6 +196,9 @@ export class DecorationRefreshManager {
   public dispose() {
     if (this.fileWatcher) {
       this.fileWatcher.dispose();
+    }
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
     }
     this.openEditors.clear();
   }

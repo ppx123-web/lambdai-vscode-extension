@@ -140,6 +140,21 @@ export function activate(context: vscode.ExtensionContext) {
     null,
     context.subscriptions
   );
+
+  // Set up periodic refresh for both types of decorations
+  const refreshInterval = setInterval(() => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor && editor.document.languageId === 'python') {
+      updateAIExecuteDecorations(editor);
+      updateAIExecuteInfoDecorations(editor);
+    }
+  }, 2000);
+
+  context.subscriptions.push({
+    dispose: () => {
+      clearInterval(refreshInterval);
+    }
+  });
 }
 
 let globalPanelManager: PanelManager | null = null;
