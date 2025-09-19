@@ -133,7 +133,7 @@ export class LineTracker {
     await this.updateFileLineMap(document);
   }
 
-  private calculateLineShifts(changes: readonly vscode.TextDocumentContentChange[]): Array<{startLine: number, shift: number}> {
+  private calculateLineShifts(changes: readonly vscode.TextDocumentContentChangeEvent[]): Array<{startLine: number, shift: number}> {
     const lineShifts: Array<{startLine: number, shift: number}> = [];
     
     for (const change of changes) {

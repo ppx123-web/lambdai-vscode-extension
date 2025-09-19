@@ -174,10 +174,8 @@ async function generatePanelContent(
     return null;
   }
 
-  // Create HTML for the panel
-  let stepsHtml = "";
-
-  // Reverse order: show final result first, then previous attempts
+  // Generate steps data for navigation
+  const stepsData = [];
   for (let i = result.steps.length - 1; i >= 0; i--) {
     const step = result.steps[i];
     const code = decodeBase64(step.code);
@@ -226,7 +224,8 @@ async function generatePanelContent(
        </div>`;
     }
 
-    stepsHtml += `
+    stepsData.push({
+      html: `
       <div class="step">
         <div class="${stepHeaderClass}">
           <div class="step-info">
@@ -245,12 +244,31 @@ async function generatePanelContent(
           ${explanationHtml}
         </div>
       </div>
-    `;
-
-    if (i > 0) {
-      stepsHtml += `<div class="step-connector"></div>`;
-    }
+    `,
+      title: stepTitle,
+      isFinal: i === result.steps.length - 1
+    });
   }
+
+  // Create navigation controls and initial step display
+  const navigationHtml = result.steps.length > 1 ? `
+    <div class="navigation-controls">
+      <button id="prevBtn" class="nav-btn" onclick="navigateStep(-1)">
+        ← Previous
+      </button>
+      <span class="step-indicator">
+        <span id="currentStep">1</span> / ${result.steps.length}
+      </span>
+      <button id="nextBtn" class="nav-btn" onclick="navigateStep(1)">
+        Next →
+      </button>
+    </div>
+  ` : '';
+
+  let stepsHtml = `<div id="steps-container">${stepsData[0]?.html || ''}</div>`;
+
+  // Store steps data for JavaScript navigation
+  const stepsDataJson = JSON.stringify(stepsData);
 
   // 检测当前主题
   const isDarkTheme =
@@ -285,6 +303,22 @@ async function generatePanelContent(
           color: var(--text-color);
           padding: 20px;
           line-height: 1.5;
+        }
+
+        /* Header container with navigation */
+        .header-container {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 30px;
+          padding-bottom: 15px;
+          border-bottom: 2px solid var(--border-color);
+        }
+
+        .header-container h1 {
+          margin: 0;
+          font-size: 24px;
+          color: var(--text-color);
         }
         
         h1, h2, h3 {
@@ -490,21 +524,128 @@ async function generatePanelContent(
         .summary h2 {
           margin-top: 0;
         }
+
+        /* Navigation controls styling */
+        .navigation-controls {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 6px 12px;
+          background-color: var(--code-background);
+          border-radius: 6px;
+          border: 1px solid var(--border-color);
+        }
+
+        .nav-btn {
+          background-color: var(--highlight-color);
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          min-width: 80px;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+          background-color: var(--highlight-color);
+          opacity: 0.8;
+          transform: translateY(-1px);
+        }
+
+        .nav-btn:active:not(:disabled) {
+          transform: translateY(0);
+        }
+
+        .nav-btn:disabled {
+          background-color: var(--muted-color);
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .step-indicator {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-color);
+          min-width: 50px;
+          text-align: center;
+        }
       </style>
     </head>
     <body>
-      <h1>AI Execution at Line ${line + 1}</h1>
-      
+      <div class="header-container">
+        <h1>AI Execution at Line ${line + 1}</h1>
+        ${navigationHtml}
+      </div>
+
       <div class="summary">
         <h2>Summary</h2>
         <p><strong>Total Steps:</strong> ${result.steps.length}</p>
       </div>
-      
+
       <div class="steps-container">
         ${stepsHtml}
       </div>
       
       <script>
+        // Steps data for navigation
+        const stepsData = ${stepsDataJson};
+        let currentStepIndex = 0;
+
+        // Navigation function
+        function navigateStep(direction) {
+          const newIndex = currentStepIndex + direction;
+
+          // Check bounds
+          if (newIndex < 0 || newIndex >= stepsData.length) {
+            return;
+          }
+
+          currentStepIndex = newIndex;
+
+          // Update the displayed step
+          document.getElementById('steps-container').innerHTML = stepsData[currentStepIndex].html;
+
+          // Update step indicator
+          document.getElementById('currentStep').textContent = currentStepIndex + 1;
+
+          // Update button states
+          document.getElementById('prevBtn').disabled = currentStepIndex === 0;
+          document.getElementById('nextBtn').disabled = currentStepIndex === stepsData.length - 1;
+
+          // Update button styles based on disabled state
+          updateButtonStyles();
+        }
+
+        // Update button styles based on disabled state
+        function updateButtonStyles() {
+          const prevBtn = document.getElementById('prevBtn');
+          const nextBtn = document.getElementById('nextBtn');
+
+          if (prevBtn.disabled) {
+            prevBtn.style.opacity = '0.5';
+            prevBtn.style.cursor = 'not-allowed';
+          } else {
+            prevBtn.style.opacity = '1';
+            prevBtn.style.cursor = 'pointer';
+          }
+
+          if (nextBtn.disabled) {
+            nextBtn.style.opacity = '0.5';
+            nextBtn.style.cursor = 'not-allowed';
+          } else {
+            nextBtn.style.opacity = '1';
+            nextBtn.style.cursor = 'pointer';
+          }
+        }
+
+        // Initialize button states
+        document.addEventListener('DOMContentLoaded', function() {
+          updateButtonStyles();
+        });
+
         // Handle theme changes
         window.addEventListener('message', event => {
           const message = event.data;

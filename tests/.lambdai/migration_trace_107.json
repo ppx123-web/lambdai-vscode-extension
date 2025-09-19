@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "\n                    Append the string of {operation}'s describe to the collected_sql of {schema_editor} in the following format:\n\n                    --\n                    -- operation's description\n                    --\n                    -- {reduces_to_sql_string} if operation.reduces_to_sql is False\n\n                    Each line is appended separately.\n                    ",
+        "code": "def append_operation_description_lambdai(operation: 'CreateModel', schema_editor: 'DatabaseSchemaEditor', reduces_to_sql_string: str):\n    \"\"\"\n    Append the string of operation's describe to the collected_sql of schema_editor in the following format:\n\n    --\n    -- operation's description\n    --\n    -- reduces_to_sql_string if operation.reduces_to_sql is False\n\n    Each line is appended separately.\n    \"\"\"\n    from django.db.migrations.operations.models import CreateModel\n    from django.db.backends.sqlite3.schema import DatabaseSchemaEditor\n    \n    description = operation.describe()\n    lines = [\n        \"--\",\n        f\"-- {description}\",\n        \"--\"\n    ]\n    if not operation.reduces_to_sql:\n        lines.append(f\"-- {reduces_to_sql_string}\")\n    \n    for line in lines:\n        schema_editor.collected_sql.append(line)",
+        "error": ""
+    }
+]

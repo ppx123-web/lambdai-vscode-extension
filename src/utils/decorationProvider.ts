@@ -159,19 +159,30 @@ async function getAIExecuteStatus(
 
     const fullResult = data.results[resultKey];
     if (fullResult && fullResult.steps) {
-      // Check if any trace steps have errors
+      // Find the last trace step to determine final status
+      let finalTraceStep: any = null;
       for (const step of fullResult.steps) {
         const isTrace = step.args_md5 === "trace";
         if (isTrace) {
-          const explanation = decodeBase64(step.explaination);
-          const hasError = explanation && explanation.trim() !== "";
-          if (hasError) {
-            return {
-              status: "error",
-              statusEmoji: "❌",
-              statusColor: "#f14c4c", // Red
-            };
-          }
+          finalTraceStep = step; // Keep updating, last one wins
+        }
+      }
+
+      if (finalTraceStep) {
+        const explanation = decodeBase64(finalTraceStep.explaination);
+        const hasError = explanation && explanation.trim() !== "";
+        if (hasError) {
+          return {
+            status: "error",
+            statusEmoji: "❌",
+            statusColor: "#f14c4c", // Red
+          };
+        } else {
+          return {
+            status: "success",
+            statusEmoji: "✅",
+            statusColor: "#73c991", // Green
+          };
         }
       }
     }
