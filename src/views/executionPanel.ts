@@ -492,6 +492,7 @@ async function generatePanelContent(
           font-family: monospace;
           color: var(--error-color);
           font-weight: bold;
+          white-space: pre-wrap;
         }
         
         .step-connector {
