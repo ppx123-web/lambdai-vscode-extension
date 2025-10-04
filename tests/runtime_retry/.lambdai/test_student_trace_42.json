@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "\u5c06\u59d3\u540d\u3001\u5e74\u9f84\u3001\u5b66\u53f7\u3001\u4e13\u4e1a\u548cGPA\u7684\u6570\u636e {data} \u8f6c\u6362\u4e3aStudent\u5bf9\u8c61,\u8fd4\u56deStudent\u5bf9\u8c61\u7684\u5217\u8868",
+        "code": "def convert_to_students_lambdai(data: list) -> list:\n    \"\"\"\n    \u5c06\u59d3\u540d\u3001\u5e74\u9f84\u3001\u5b66\u53f7\u3001\u4e13\u4e1a\u548cGPA\u7684\u6570\u636e {data} \u8f6c\u6362\u4e3aStudent\u5bf9\u8c61,\u8fd4\u56deStudent\u5bf9\u8c61\u7684\u5217\u8868\n    \"\"\"\n    students = []\n    for item in data:\n        student = Student(\n            name=item[0],\n            age=item[1],\n            student_id=item[2],\n            major=item[3],\n            gpa=item[4]\n        )\n        students.append(student)\n    return students",
+        "error": ""
+    }
+]

@@ -6,6 +6,8 @@ import {
   decodeBase64,
   readSynthesizedData,
 } from "../utils/synthesizedDataReader";
+import * as fs from "fs";
+import * as path from "path";
 import { PanelManager } from "../utils/panelManager";
 // Load Prism.js for syntax highlighting
 const Prism: {
@@ -139,6 +141,36 @@ function generateEmptyPanelContent(filePath: string, line: number): string {
 /**
  * Generate HTML content for the execution panel
  */
+/**
+ * Read messages file for a specific line
+ */
+async function readMessagesFile(filePath: string, line: number): Promise<any[] | null> {
+  try {
+    const dir = path.dirname(filePath);
+    const fileName = path.basename(filePath, path.extname(filePath));
+
+    // Find .lambdai directory
+    const lambdaiDir = path.join(dir, '.lambdai');
+    if (!fs.existsSync(lambdaiDir)) {
+      return null;
+    }
+
+    // Look for messages file with matching name pattern
+    const messagesFileName = `${fileName}_messages_${line + 1}.json`;
+    const messagesFilePath = path.join(lambdaiDir, messagesFileName);
+
+    if (!fs.existsSync(messagesFilePath)) {
+      return null;
+    }
+
+    const content = fs.readFileSync(messagesFilePath, 'utf8');
+    return JSON.parse(content);
+  } catch (error) {
+    console.error('Error reading messages file:', error);
+    return null;
+  }
+}
+
 async function generatePanelContent(
   filePath: string,
   line: number
@@ -174,6 +206,44 @@ async function generatePanelContent(
     return null;
   }
 
+  // Check if last code block has error and matches current file content
+  let shouldShowErrorAsLastPage = false;
+  let lastStepError = "";
+
+  if (result.steps.length > 0) {
+    const lastStep = result.steps[0]; // First step is the most recent (loop goes backwards)
+    const lastStepCode = decodeBase64(lastStep.code);
+    const lastStepExplanation = decodeBase64(lastStep.explaination);
+    const isLastStepTrace = lastStep.args_md5 === "trace";
+    const hasLastStepError = isLastStepTrace && lastStepExplanation && lastStepExplanation.trim() !== "";
+
+    if (hasLastStepError) {
+      try {
+        // Read current file content
+        const currentFileContent = fs.readFileSync(filePath, 'utf8');
+        const currentFileLines = currentFileContent.split('\n');
+        const lineStart = line;
+        const lineEnd = line + lastStepCode.split('\n').length;
+        const currentCodeBlock = currentFileLines.slice(lineStart, lineEnd).join('\n').trim();
+
+        // Compare normalized code (remove leading/trailing whitespace and normalize line endings)
+        const normalizedLastStepCode = lastStepCode.trim().replace(/\r\n/g, '\n');
+        const normalizedCurrentCode = currentCodeBlock.trim().replace(/\r\n/g, '\n');
+
+        if (normalizedLastStepCode === normalizedCurrentCode) {
+          shouldShowErrorAsLastPage = true;
+          lastStepError = lastStepExplanation;
+        }
+      } catch (error) {
+        // If we can't read the file, don't show error as last page
+        console.error('Error reading file for comparison:', error);
+      }
+    }
+  }
+
+  // Read messages data
+  const messagesData = await readMessagesFile(filePath, line);
+
   // Generate steps data for navigation
   const stepsData = [];
   for (let i = result.steps.length - 1; i >= 0; i--) {
@@ -189,7 +259,14 @@ async function generatePanelContent(
 
     // Determine step status and styling
     let stepHeaderClass, stepTitle, statusIndicator;
-    if (i === result.steps.length - 1) {
+    const isFinalStep = i === result.steps.length - 1;
+
+    if (isFinalStep && shouldShowErrorAsLastPage) {
+      // Show error as final step when code matches and has error
+      stepHeaderClass = "step-header error-step";
+      stepTitle = "Final Result (Error)";
+      statusIndicator = '<span class="status-indicator error">✗ ERROR</span>';
+    } else if (isFinalStep) {
       // Final step
       stepHeaderClass = "step-header final-step";
       stepTitle = "Final Result";
@@ -212,7 +289,13 @@ async function generatePanelContent(
 
     // Create explanation/error content
     let explanationHtml = "";
-    if (isTrace && hasError) {
+    if (isFinalStep && shouldShowErrorAsLastPage) {
+      // Show the stored error message for the final step
+      explanationHtml = `<div class="step-error">
+         <h3>Error Details</h3>
+         <div class="error-message">${escapeHtml(lastStepError)}</div>
+       </div>`;
+    } else if (isTrace && hasError) {
       explanationHtml = `<div class="step-error">
          <h3>Error Details</h3>
          <div class="error-message">${escapeHtml(explanation)}</div>
@@ -262,10 +345,49 @@ async function generatePanelContent(
       <button id="nextBtn" class="nav-btn" onclick="navigateStep(1)">
         Next →
       </button>
+      ${messagesData ? `
+        <button id="messagesBtn" class="nav-btn" onclick="toggleMessages()">
+          Messages
+        </button>
+      ` : ''}
+    </div>
+  ` : messagesData ? `
+    <div class="navigation-controls">
+      <button id="messagesBtn" class="nav-btn" onclick="toggleMessages()">
+        Messages
+      </button>
     </div>
   ` : '';
 
   let stepsHtml = `<div id="steps-container">${stepsData[0]?.html || ''}</div>`;
+
+  // Generate messages HTML content
+  let messagesHtml = "";
+  if (messagesData) {
+    messagesHtml = `
+      <div class="messages-container" id="messages-container" style="display: none;">
+        <h2>Messages</h2>
+        <div class="messages-content">
+    `;
+
+    for (const message of messagesData) {
+      const role = message.role || 'unknown';
+      const content = escapeHtml(message.content || '');
+      messagesHtml += `
+        <div class="message-item">
+          <div class="message-role ${role}">
+            ${role.toUpperCase()}
+          </div>
+          <div class="message-content">${content}</div>
+        </div>
+      `;
+    }
+
+    messagesHtml += `
+        </div>
+      </div>
+    `;
+  }
 
   // Store steps data for JavaScript navigation
   const stepsDataJson = JSON.stringify(stepsData);
@@ -573,6 +695,70 @@ async function generatePanelContent(
           min-width: 50px;
           text-align: center;
         }
+
+        /* Messages styles */
+        .messages-container {
+          background-color: var(--background-color);
+          padding: 20px;
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
+          margin: 20px 0;
+        }
+
+        .messages-container h2 {
+          color: var(--text-color);
+          margin-bottom: 20px;
+          border-bottom: 2px solid var(--border-color);
+          padding-bottom: 10px;
+        }
+
+        .message-item {
+          margin-bottom: 20px;
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          overflow: hidden;
+        }
+
+        .message-role {
+          padding: 10px 15px;
+          font-weight: 600;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .message-role.system {
+          background-color: ${isDarkTheme ? "#1e3a8a" : "#dbeafe"};
+          color: ${isDarkTheme ? "#93c5fd" : "#1e40af"};
+        }
+
+        .message-role.user {
+          background-color: ${isDarkTheme ? "#14532d" : "#dcfce7"};
+          color: ${isDarkTheme ? "#86efac" : "#166534"};
+        }
+
+        .message-role.assistant {
+          background-color: ${isDarkTheme ? "#581c87" : "#f3e8ff"};
+          color: ${isDarkTheme ? "#d8b4fe" : "#6b21a8"};
+        }
+
+        .message-role.unknown {
+          background-color: ${isDarkTheme ? "#451a03" : "#fef3c7"};
+          color: ${isDarkTheme ? "#fbbf24" : "#92400e"};
+        }
+
+        .message-content {
+          padding: 15px;
+          background-color: var(--code-background);
+          font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
+          font-size: 13px;
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          color: var(--text-color);
+          max-height: 500px;
+          overflow-y: auto;
+        }
       </style>
     </head>
     <body>
@@ -589,6 +775,8 @@ async function generatePanelContent(
       <div class="steps-container">
         ${stepsHtml}
       </div>
+
+      ${messagesHtml}
       
       <script>
         // Steps data for navigation
@@ -639,6 +827,30 @@ async function generatePanelContent(
           } else {
             nextBtn.style.opacity = '1';
             nextBtn.style.cursor = 'pointer';
+          }
+        }
+
+        // Toggle messages display
+        function toggleMessages() {
+          const messagesContainer = document.getElementById('messages-container');
+          const messagesBtn = document.getElementById('messagesBtn');
+          const stepsContainer = document.getElementById('steps-container');
+          const summaryContainer = document.querySelector('.summary');
+
+          if (messagesContainer.style.display === 'none') {
+            // Show messages
+            messagesContainer.style.display = 'block';
+            stepsContainer.style.display = 'none';
+            summaryContainer.style.display = 'none';
+            messagesBtn.textContent = 'Back to Steps';
+            messagesBtn.style.backgroundColor = 'var(--error-color)';
+          } else {
+            // Show steps
+            messagesContainer.style.display = 'none';
+            stepsContainer.style.display = 'block';
+            summaryContainer.style.display = 'block';
+            messagesBtn.textContent = 'Messages';
+            messagesBtn.style.backgroundColor = 'var(--highlight-color)';
           }
         }
 
@@ -714,10 +926,18 @@ export async function showExecutionPanel(
     }
   };
 
+  // Set up periodic refresh every 2 seconds
+  const refreshInterval = setInterval(refreshPanel, 2000);
+
   // Register panel with manager if provided
   if (panelManager) {
     panelManager.registerPanel(panel, filePath, line, refreshPanel);
   }
+
+  // Clean up interval when panel is disposed
+  panel.onDidDispose(() => {
+    clearInterval(refreshInterval);
+  });
 
   // 监听主题变化并更新 webview
   context.subscriptions.push(

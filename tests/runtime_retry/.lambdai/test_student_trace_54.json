@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "\u5c06GPA\u5c0f\u4e8e3.7\u7684\u5b66\u751f {students} \u9000\u5b66\u8fd4\u56de\u9000\u5b66\u540e\u5269\u4e0b\u7684\u5b66\u751f\u5217\u8868",
+        "code": "def expel_students_lambdai(students: list) -> list:\n    \"\"\"\n    \u5c06GPA\u5c0f\u4e8e3.7\u7684\u5b66\u751f {students} \u9000\u5b66\u8fd4\u56de\u9000\u5b66\u540e\u5269\u4e0b\u7684\u5b66\u751f\u5217\u8868\n    \"\"\"\n    remaining_students = []\n    for student in students:\n        if student.gpa >= 3.7:\n            remaining_students.append(student)\n    return remaining_students",
+        "error": ""
+    }
+]

@@ -1,0 +1,7 @@
+[
+    {
+        "prompt": "\u4ececsv\u6587\u4ef6{file}\u4e2d\u8bfb\u53d6\u6570\u636e\u5e76\u5904\u7406,\u4fdd\u7559\u8868\u5934'\u59d3\u540d'\u548c'\u5e74\u9f84',\u4ee5\u53ca\u5bf9\u5e94\u5217\u7684\u6570\u636e,\u8fd4\u56delist[list[str]]\u4f5c\u4e3a\u8868\u683c",
+        "code": "def read_csv_lambdai(file: str) -> list[list[str]]:\n    \"\"\"\n    \u4ececsv\u6587\u4ef6{file}\u4e2d\u8bfb\u53d6\u6570\u636e\u5e76\u5904\u7406,\u4fdd\u7559\u8868\u5934'\u59d3\u540d'\u548c'\u5e74\u9f84',\u4ee5\u53ca\u5bf9\u5e94\u5217\u7684\u6570\u636e,\u8fd4\u56delist[list[str]]\u4f5c\u4e3a\u8868\u683c\n    \"\"\"\n    import csv\n    \n    result = []\n    with open(file, 'r', encoding='utf-8') as csvfile:\n        reader = csv.reader(csvfile)\n        headers = next(reader)\n        \n        # \u83b7\u53d6'\u59d3\u540d'\u548c'\u5e74\u9f84'\u5217\u7684\u7d22\u5f15\n        name_index = headers.index('\u59d3\u540d')\n        age_index = headers.index('\u5e74\u9f84')\n        \n        # \u6dfb\u52a0\u8868\u5934\n        result.append(['\u59d3\u540d', '\u5e74\u9f84'])\n        \n        # \u8bfb\u53d6\u6570\u636e\u884c\uff0c\u53ea\u4fdd\u7559\u59d3\u540d\u548c\u5e74\u9f84\u5217\n        for row in reader:\n            if len(row) > max(name_index, age_index):\n                result.append([row[name_index], row[age_index]])\n    \n    return result",
+        "error": ""
+    }
+]
