@@ -1,0 +1,17 @@
+[
+    {
+        "input": 436,
+        "output": 1,
+        "cache": 0
+    },
+    {
+        "input": 254,
+        "output": 1,
+        "cache": 0
+    },
+    {
+        "input": 706,
+        "output": 34,
+        "cache": 0
+    }
+]

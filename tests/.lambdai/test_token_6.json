@@ -1,0 +1,17 @@
+[
+    {
+        "input": 150,
+        "output": 75,
+        "cache": 25
+    },
+    {
+        "input": 200,
+        "output": 100,
+        "cache": 30
+    },
+    {
+        "input": 180,
+        "output": 90,
+        "cache": 20
+    }
+]

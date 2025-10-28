@@ -13,6 +13,10 @@ interface AIGeneratedCode {
   lastModified: Date;
   hasCache: boolean;
   hasTrace: boolean;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+  totalTokens?: number; // input + output
 }
 
 export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
@@ -147,7 +151,7 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
           const finalStep = result.steps[result.steps.length - 1];
           const code = decodeBase64(finalStep.code);
 
-          // Check for cache and trace files
+          // Check for cache, trace, and token files
           const cacheFile = path.join(
             lambdaiDir,
             `${fileName}_cache_${line + 1}.py`
@@ -156,9 +160,27 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
             lambdaiDir,
             `${fileName}_trace_${line + 1}.json`
           );
+          const tokenFile = path.join(
+            lambdaiDir,
+            `${fileName}_token_${line + 1}.json`
+          );
 
           const hasCache = fs.existsSync(cacheFile);
           const hasTrace = fs.existsSync(traceFile);
+          const hasToken = fs.existsSync(tokenFile);
+
+          // Read token data if token file exists
+          let inputTokens: number | undefined;
+          let outputTokens: number | undefined;
+          let cacheTokens: number | undefined;
+          let totalTokens: number | undefined;
+          if (hasToken) {
+            const tokenData = await this._readTokenData(tokenFile);
+            inputTokens = tokenData.inputTokens;
+            outputTokens = tokenData.outputTokens;
+            cacheTokens = tokenData.cacheTokens;
+            totalTokens = tokenData.totalTokens;
+          }
 
           // Get last modified time
           let lastModified = new Date();
@@ -177,6 +199,10 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
             lastModified,
             hasCache,
             hasTrace,
+            inputTokens,
+            outputTokens,
+            cacheTokens,
+            totalTokens,
           };
 
           // Use the unique ID as the key to prevent duplicates
@@ -185,6 +211,68 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
       }
     } catch (error) {
       console.error("Error scanning workspace folder:", error);
+    }
+  }
+
+  private async _readTokenData(tokenFilePath: string): Promise<{
+    inputTokens: number | undefined;
+    outputTokens: number | undefined;
+    cacheTokens: number | undefined;
+    totalTokens: number | undefined;
+  }> {
+    try {
+      const tokenData = JSON.parse(fs.readFileSync(tokenFilePath, 'utf8'));
+
+      // Handle the known token file format: array of steps with input, output, cache
+      if (Array.isArray(tokenData)) {
+        let totalInput = 0;
+        let totalOutput = 0;
+        let totalCache = 0;
+
+        for (const step of tokenData) {
+          if (step && typeof step === 'object') {
+            const inputTokens = typeof step.input === 'number' ? step.input : 0;
+            const outputTokens = typeof step.output === 'number' ? step.output : 0;
+            const cacheTokens = typeof step.cache === 'number' ? step.cache : 0;
+
+            totalInput += inputTokens;
+            totalOutput += outputTokens;
+            totalCache += cacheTokens;
+          }
+        }
+
+        return {
+          inputTokens: totalInput,
+          outputTokens: totalOutput,
+          cacheTokens: totalCache,
+          totalTokens: totalInput + totalOutput, // input + output only
+        };
+      }
+
+      // Handle other possible token file formats (fallback)
+      let tokenCount: number | undefined;
+      if (typeof tokenData === 'number') {
+        tokenCount = tokenData;
+      } else if (tokenData && typeof tokenData.totalTokens === 'number') {
+        tokenCount = tokenData.totalTokens;
+      } else if (tokenData && typeof tokenData.tokens === 'number') {
+        tokenCount = tokenData.tokens;
+      }
+
+      return {
+        inputTokens: tokenCount,
+        outputTokens: 0,
+        cacheTokens: 0,
+        totalTokens: tokenCount,
+      };
+    } catch (error) {
+      console.error(`Error reading token file ${tokenFilePath}:`, error);
+      return {
+        inputTokens: undefined,
+        outputTokens: undefined,
+        cacheTokens: undefined,
+        totalTokens: undefined,
+      };
     }
   }
 
@@ -315,10 +403,35 @@ export class LambdaiPanelProvider implements vscode.WebviewViewProvider {
           <label>Last Modified:</label>
           <span>${selectedCode.lastModified.toLocaleString()}</span>
         </div>
+        ${
+          selectedCode.inputTokens !== undefined ||
+          selectedCode.outputTokens !== undefined ||
+          selectedCode.cacheTokens !== undefined ||
+          selectedCode.totalTokens !== undefined
+            ? `
+        <div class="stat-item">
+          <label>Input Tokens:</label>
+          <span>${selectedCode.inputTokens?.toLocaleString() || 0}</span>
+        </div>
+        <div class="stat-item">
+          <label>Output Tokens:</label>
+          <span>${selectedCode.outputTokens?.toLocaleString() || 0}</span>
+        </div>
+        <div class="stat-item">
+          <label>Cache Tokens:</label>
+          <span>${selectedCode.cacheTokens?.toLocaleString() || 0}</span>
+        </div>
+        <div class="stat-item">
+          <label><strong>Total Tokens:</strong></label>
+          <span><strong>${selectedCode.totalTokens?.toLocaleString() || 0}</strong></span>
+        </div>
+        `
+            : ""
+        }
         <div class="stat-item">
           <label>Files:</label>
           <span>
-            ${selectedCode.hasCache ? "💾 Cache" : "❌ No Cache"} | 
+            ${selectedCode.hasCache ? "💾 Cache" : "❌ No Cache"} |
             ${selectedCode.hasTrace ? "🔍 Trace" : "❌ No Trace"}
           </span>
         </div>

@@ -1,0 +1,28 @@
+2025-10-28 21:42:37.408 | DEBUG    | config.py:32 - Reserved fields and values: {'cache': True, 'template_relative_dir': 'templates', 'template_dir': 'templates', 'log_files': ['.lambdai/lambdai.log'], 'log_level': 'DEBUG', 'api_style': <APIStyle.REQUESTS: 'requests'>}
+2025-10-28 21:42:37.473 | DEBUG    | requests_handler.py:52 - LLM API Request to https://ark.cn-beijing.volces.com/api/v3/chat/completions with parameters: {'model': 'deepseek-v3-1-250821', 'temperature': 0.0}
+2025-10-28 21:42:38.641 | INFO     | client.py:36 - Token usage - Input: 436, Output: 1, Cache: 0
+2025-10-28 21:42:38.644 | INFO     | codes.py:36 - Initial classes: [<class 'int'>]
+2025-10-28 21:42:38.647 | DEBUG    | requests_handler.py:52 - LLM API Request to https://ark.cn-beijing.volces.com/api/v3/chat/completions with parameters: {'model': 'deepseek-v3-1-250821', 'temperature': 0.0}
+2025-10-28 21:42:39.198 | INFO     | client.py:36 - Token usage - Input: 254, Output: 1, Cache: 0
+2025-10-28 21:42:39.208 | DEBUG    | system_prompt.py:47 - System prompt initialized
+2025-10-28 21:42:39.209 | DEBUG    | render.py:44 - SystemPromptAgent: Initialized system prompt
+2025-10-28 21:42:39.211 | DEBUG    | prompt.py:21 - Added task message to messages
+2025-10-28 21:42:39.212 | DEBUG    | requests_handler.py:52 - LLM API Request to https://ark.cn-beijing.volces.com/api/v3/chat/completions with parameters: {'model': 'deepseek-v3-1-250821', 'temperature': 0.0}
+2025-10-28 21:42:43.398 | INFO     | client.py:36 - Token usage - Input: 706, Output: 34, Cache: 0
+2025-10-28 21:42:43.402 | DEBUG    | llm.py:16 - Synthesize code: 
+def calculate_sum_lambdai() -> 'int':
+    """
+    1 + 1
+    """
+    return 1 + 1
+2025-10-28 21:42:43.404 | DEBUG    | parse.py:48 - Extracted function names: ['calculate_sum_lambdai']
+2025-10-28 21:42:43.406 | DEBUG    | parse.py:59 - Function parameters: []
+2025-10-28 21:42:43.407 | DEBUG    | parse.py:81 - Return args counts=[1]
+2025-10-28 21:42:43.408 | INFO     | exec.py:90 - ExecSpec result: 2
+2025-10-28 21:42:43.422 | DEBUG    | config.py:32 - Reserved fields and values: {'cache': True, 'template_relative_dir': 'templates', 'template_dir': 'templates', 'log_files': ['.lambdai/lambdai.log'], 'log_level': 'DEBUG', 'api_style': <APIStyle.REQUESTS: 'requests'>}
+2025-10-28 21:42:43.423 | DEBUG    | code.py:17 - Load code from cache: /Users/choi/work/lambdai/tmp/.lambdai/a_cache_6.py
+2025-10-28 21:42:43.423 | DEBUG    | code.py:17 - Load code from cache: /Users/choi/work/lambdai/tmp/.lambdai/a_cache_6.py
+2025-10-28 21:42:43.423 | DEBUG    | parse.py:48 - Extracted function names: ['calculate_sum_lambdai']
+2025-10-28 21:42:43.423 | DEBUG    | parse.py:59 - Function parameters: []
+2025-10-28 21:42:43.424 | DEBUG    | parse.py:81 - Return args counts=[1]
+2025-10-28 21:42:43.424 | INFO     | exec.py:90 - ExecSpec result: 2

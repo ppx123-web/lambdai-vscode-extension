@@ -11,6 +11,7 @@ export async function invalidateCache(
     const filePath = uri.fsPath;
     const fileDir = path.dirname(filePath);
     const fileName = path.basename(filePath, ".py");
+    const lineNumber = line + 1;
 
     // Find .lambdai directory
     const lambdaaiDir = findLambdaiDir(fileDir);
@@ -19,46 +20,51 @@ export async function invalidateCache(
       return;
     }
 
-    // Construct cache and trace file paths
-    const cacheFileName = `${fileName}_cache_${line + 1}.py`;
-    const traceFileName = `${fileName}_trace_${line + 1}.json`;
-    const cacheFilePath = path.join(lambdaaiDir, cacheFileName);
-    const traceFilePath = path.join(lambdaaiDir, traceFileName);
+    // Create glob pattern to find all files matching *_{lineno}.* in all subdirectories
+    const globPattern = new vscode.RelativePattern(
+      lambdaaiDir,
+      `**/${fileName}_*_${lineNumber}.*`
+    );
 
-    let deletedFiles = [];
-    let notFoundFiles = [];
+    // Find all matching files
+    const files = await vscode.workspace.findFiles(globPattern);
 
-    // Check and delete cache file
-    if (fs.existsSync(cacheFilePath)) {
-      fs.unlinkSync(cacheFilePath);
-      deletedFiles.push(cacheFileName);
-    } else {
-      notFoundFiles.push(cacheFileName);
+    if (files.length === 0) {
+      vscode.window.showErrorMessage(
+        `No cache files found for ${fileName} line ${lineNumber}`
+      );
+      return;
     }
 
-    // Check and delete trace file
-    if (fs.existsSync(traceFilePath)) {
-      fs.unlinkSync(traceFilePath);
-      deletedFiles.push(traceFileName);
-    } else {
-      notFoundFiles.push(traceFileName);
+    let deletedFiles = [];
+    let failedFiles = [];
+
+    // Delete all found files
+    for (const file of files) {
+      try {
+        fs.unlinkSync(file.fsPath);
+        deletedFiles.push(path.basename(file.fsPath));
+      } catch (error) {
+        console.error(`Failed to delete ${file.fsPath}:`, error);
+        failedFiles.push(path.basename(file.fsPath));
+      }
     }
 
     // Show appropriate message
     if (deletedFiles.length > 0) {
-      const deletedMessage = `Cache invalidated: ${deletedFiles.join(", ")}`;
-      if (notFoundFiles.length > 0) {
-        vscode.window.showInformationMessage(
-          `${deletedMessage} (${notFoundFiles.join(", ")} not found)`
+      const deletedMessage = `Deleted ${deletedFiles.length} cache file(s) for ${fileName} line ${lineNumber}: ${deletedFiles.join(", ")}`;
+
+      if (failedFiles.length > 0) {
+        vscode.window.showWarningMessage(
+          `${deletedMessage} (Failed to delete: ${failedFiles.join(", ")})`
         );
       } else {
         vscode.window.showInformationMessage(deletedMessage);
       }
     } else {
       vscode.window.showErrorMessage(
-        `No cache files found for line ${line + 1}`
+        `Failed to delete any cache files for ${fileName} line ${lineNumber}`
       );
-      return;
     }
   } catch (error) {
     console.error("Error invalidating cache:", error);

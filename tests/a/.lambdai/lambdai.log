@@ -1,0 +1,1 @@
+2025-10-28 21:53:54.416 | DEBUG    | __init__.py:57 - Creating config from environment variables: model=deepseek-v3-1-250821, api_key=***, base_url=https://ark.cn-beijing.volces.com/api/v3, temperature=0.0, api_style=APIStyle.REQUESTS
