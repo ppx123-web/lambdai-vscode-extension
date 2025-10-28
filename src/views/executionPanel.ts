@@ -171,6 +171,68 @@ async function readMessagesFile(filePath: string, line: number): Promise<any[] |
   }
 }
 
+/**
+ * Read token data for a specific line
+ */
+async function readTokenData(filePath: string, line: number): Promise<{
+  inputTokens: number | undefined;
+  outputTokens: number | undefined;
+  cacheTokens: number | undefined;
+  totalTokens: number | undefined;
+} | null> {
+  try {
+    const dir = path.dirname(filePath);
+    const fileName = path.basename(filePath, path.extname(filePath));
+
+    // Find .lambdai directory
+    const lambdaiDir = path.join(dir, '.lambdai');
+    if (!fs.existsSync(lambdaiDir)) {
+      return null;
+    }
+
+    // Look for token file with matching name pattern
+    const tokenFileName = `${fileName}_token_${line + 1}.json`;
+    const tokenFilePath = path.join(lambdaiDir, tokenFileName);
+
+    if (!fs.existsSync(tokenFilePath)) {
+      return null;
+    }
+
+    const tokenData = JSON.parse(fs.readFileSync(tokenFilePath, 'utf8'));
+
+    // Handle the known token file format: array of steps with input, output, cache
+    if (Array.isArray(tokenData)) {
+      let totalInput = 0;
+      let totalOutput = 0;
+      let totalCache = 0;
+
+      for (const step of tokenData) {
+        if (step && typeof step === 'object') {
+          const inputTokens = typeof step.input === 'number' ? step.input : 0;
+          const outputTokens = typeof step.output === 'number' ? step.output : 0;
+          const cacheTokens = typeof step.cache === 'number' ? step.cache : 0;
+
+          totalInput += inputTokens;
+          totalOutput += outputTokens;
+          totalCache += cacheTokens;
+        }
+      }
+
+      return {
+        inputTokens: totalInput,
+        outputTokens: totalOutput,
+        cacheTokens: totalCache,
+        totalTokens: totalInput + totalOutput, // input + output only
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error reading token file:', error);
+    return null;
+  }
+}
+
 async function generatePanelContent(
   filePath: string,
   line: number
@@ -243,6 +305,9 @@ async function generatePanelContent(
 
   // Read messages data
   const messagesData = await readMessagesFile(filePath, line);
+
+  // Read token data
+  const tokenData = await readTokenData(filePath, line);
 
   // Generate steps data for navigation
   const stepsData = [];
@@ -350,12 +415,24 @@ async function generatePanelContent(
           Messages
         </button>
       ` : ''}
+      ${tokenData ? `
+        <button id="tokensBtn" class="nav-btn" onclick="toggleTokens()">
+          Tokens
+        </button>
+      ` : ''}
     </div>
-  ` : messagesData ? `
+  ` : (messagesData || tokenData) ? `
     <div class="navigation-controls">
-      <button id="messagesBtn" class="nav-btn" onclick="toggleMessages()">
-        Messages
-      </button>
+      ${messagesData ? `
+        <button id="messagesBtn" class="nav-btn" onclick="toggleMessages()">
+          Messages
+        </button>
+      ` : ''}
+      ${tokenData ? `
+        <button id="tokensBtn" class="nav-btn" onclick="toggleTokens()">
+          Tokens
+        </button>
+      ` : ''}
     </div>
   ` : '';
 
@@ -384,6 +461,39 @@ async function generatePanelContent(
     }
 
     messagesHtml += `
+        </div>
+      </div>
+    `;
+  }
+
+  // Generate tokens HTML content
+  let tokensHtml = "";
+  if (tokenData) {
+    tokensHtml = `
+      <div class="tokens-container" id="tokens-container" style="display: none;">
+        <h2>Token Usage Statistics</h2>
+        <div class="tokens-content">
+          <div class="token-statistics">
+            <div class="token-item">
+              <div class="token-label">Input Tokens</div>
+              <div class="token-value input">${tokenData.inputTokens?.toLocaleString() || 0}</div>
+            </div>
+            <div class="token-item">
+              <div class="token-label">Output Tokens</div>
+              <div class="token-value output">${tokenData.outputTokens?.toLocaleString() || 0}</div>
+            </div>
+            <div class="token-item">
+              <div class="token-label">Cache Tokens</div>
+              <div class="token-value cache">${tokenData.cacheTokens?.toLocaleString() || 0}</div>
+            </div>
+            <div class="token-item total">
+              <div class="token-label">Total Tokens</div>
+              <div class="token-value total">${tokenData.totalTokens?.toLocaleString() || 0}</div>
+            </div>
+          </div>
+          <div class="token-description">
+            <p><strong>Total Tokens</strong> = Input Tokens + Output Tokens (cache tokens are not included in total)</p>
+          </div>
         </div>
       </div>
     `;
@@ -636,17 +746,6 @@ async function generatePanelContent(
           border-right: 5px solid transparent;
           border-top: 8px solid var(--highlight-color);
         }
-        
-        .summary {
-          background-color: var(--code-background);
-          border-radius: 8px;
-          padding: 16px;
-          margin-bottom: 30px;
-        }
-        
-        .summary h2 {
-          margin-top: 0;
-        }
 
         /* Navigation controls styling */
         .navigation-controls {
@@ -759,6 +858,92 @@ async function generatePanelContent(
           max-height: 500px;
           overflow-y: auto;
         }
+
+        /* Tokens styles */
+        .tokens-container {
+          background-color: var(--background-color);
+          padding: 20px;
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
+          margin: 20px 0;
+        }
+
+        .tokens-container h2 {
+          color: var(--text-color);
+          margin-bottom: 20px;
+          border-bottom: 2px solid var(--border-color);
+          padding-bottom: 10px;
+        }
+
+        .token-statistics {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+
+        .token-item {
+          background-color: var(--code-background);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 20px;
+          text-align: center;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .token-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .token-item.total {
+          border: 2px solid var(--highlight-color);
+          background-color: ${isDarkTheme ? "rgba(14, 99, 156, 0.1)" : "rgba(0, 122, 204, 0.1)"};
+        }
+
+        .token-label {
+          font-size: 14px;
+          color: var(--muted-color);
+          margin-bottom: 8px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .token-value {
+          font-size: 24px;
+          font-weight: bold;
+          font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
+        }
+
+        .token-value.input {
+          color: ${isDarkTheme ? "#60a5fa" : "#2563eb"};
+        }
+
+        .token-value.output {
+          color: ${isDarkTheme ? "#34d399" : "#059669"};
+        }
+
+        .token-value.cache {
+          color: ${isDarkTheme ? "#fbbf24" : "#d97706"};
+        }
+
+        .token-value.total {
+          color: var(--highlight-color);
+        }
+
+        .token-description {
+          background-color: var(--code-background);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 12px;
+          font-size: 13px;
+          color: var(--muted-color);
+        }
+
+        .token-description p {
+          margin: 0;
+        }
       </style>
     </head>
     <body>
@@ -767,17 +952,14 @@ async function generatePanelContent(
         ${navigationHtml}
       </div>
 
-      <div class="summary">
-        <h2>Summary</h2>
-        <p><strong>Total Steps:</strong> ${result.steps.length}</p>
-      </div>
-
       <div class="steps-container">
         ${stepsHtml}
       </div>
 
       ${messagesHtml}
-      
+
+      ${tokensHtml}
+
       <script>
         // Steps data for navigation
         const stepsData = ${stepsDataJson};
@@ -835,22 +1017,40 @@ async function generatePanelContent(
           const messagesContainer = document.getElementById('messages-container');
           const messagesBtn = document.getElementById('messagesBtn');
           const stepsContainer = document.getElementById('steps-container');
-          const summaryContainer = document.querySelector('.summary');
 
           if (messagesContainer.style.display === 'none') {
             // Show messages
             messagesContainer.style.display = 'block';
             stepsContainer.style.display = 'none';
-            summaryContainer.style.display = 'none';
             messagesBtn.textContent = 'Back to Steps';
             messagesBtn.style.backgroundColor = 'var(--error-color)';
           } else {
             // Show steps
             messagesContainer.style.display = 'none';
             stepsContainer.style.display = 'block';
-            summaryContainer.style.display = 'block';
             messagesBtn.textContent = 'Messages';
             messagesBtn.style.backgroundColor = 'var(--highlight-color)';
+          }
+        }
+
+        // Toggle tokens display
+        function toggleTokens() {
+          const tokensContainer = document.getElementById('tokens-container');
+          const tokensBtn = document.getElementById('tokensBtn');
+          const stepsContainer = document.getElementById('steps-container');
+
+          if (tokensContainer.style.display === 'none') {
+            // Show tokens
+            tokensContainer.style.display = 'block';
+            stepsContainer.style.display = 'none';
+            tokensBtn.textContent = 'Back to Steps';
+            tokensBtn.style.backgroundColor = 'var(--error-color)';
+          } else {
+            // Show steps
+            tokensContainer.style.display = 'none';
+            stepsContainer.style.display = 'block';
+            tokensBtn.textContent = 'Tokens';
+            tokensBtn.style.backgroundColor = 'var(--highlight-color)';
           }
         }
 
